@@ -7,7 +7,6 @@
  */
 
 import { SvgPrimitive } from "../shared/types";
-import { STROKE, STROKE_WIDTH } from "../shared/math";
 
 export interface HoleMotif {
   id: number;
