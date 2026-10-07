@@ -12,6 +12,12 @@ export default function Header() {
         </Link>
         <nav className="flex items-center gap-6">
           <Link
+            href="/studio"
+            className="text-sm text-muted transition-colors hover:text-accent"
+          >
+            Studio
+          </Link>
+          <Link
             href="/collected"
             className="text-sm text-muted transition-colors hover:text-accent"
           >

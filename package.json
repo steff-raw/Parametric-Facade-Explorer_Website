@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:studio": "node --experimental-strip-types --no-warnings --test tests/studio.test.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^9.122.0",
