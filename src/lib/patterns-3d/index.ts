@@ -1,6 +1,7 @@
 import * as louvreCascade from "./louvre-cascade";
 import * as radialPulse from "./radial-pulse-panels";
 import * as hingedFlapGrid from "./hinged-flap-grid";
+import * as rotatedBrickScreen from "./rotated-brick-screen";
 import {
   KineticPatternModule,
   Static3DPatternModule,
@@ -13,6 +14,7 @@ export const kineticPatterns: KineticPatternModule[] = [
 
 export const static3dPatterns: Static3DPatternModule[] = [
   hingedFlapGrid.static3dModule,
+  rotatedBrickScreen.static3dModule,
 ];
 
 export function getKineticPattern(
