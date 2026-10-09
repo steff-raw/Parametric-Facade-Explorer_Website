@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { patterns, countByTag, countKinetic, allTags } from "@/lib/patterns";
 import TagPill from "./TagPill";
 import PatternCard from "./PatternCard";
-import StudioFeature from "./studio/StudioFeature";
+import StudioCard from "./studio/StudioCard";
 
 type SortMode = "recent" | "popular";
 type FilterMode = string | null | "__kinetic__";
@@ -52,8 +52,6 @@ export default function Gallery() {
           including kinetic 3D surfaces you can orbit and pause.
         </p>
       </section>
-
-      <StudioFeature />
 
       <div className="mb-4 flex flex-wrap gap-2">
         <TagPill
@@ -115,6 +113,7 @@ export default function Gallery() {
       </div>
 
       <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3">
+        {(activeFilter === null || activeFilter === "Perforated") && <StudioCard />}
         {filtered.map((p) => (
           <PatternCard key={p.meta.slug} pattern={p} />
         ))}

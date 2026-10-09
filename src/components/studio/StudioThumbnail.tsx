@@ -6,8 +6,8 @@ import { DEFAULT_SPEC, generateStudio, StudioSpec } from "@/lib/studio/engine";
 // A small, real Studio output: same engine as /studio, coarse pitch so it renders instantly.
 const THUMB_SPEC: StudioSpec = {
   ...DEFAULT_SPEC,
-  facadeW: 12000,
-  facadeH: 6000,
+  facadeW: 9000,
+  facadeH: 9000,
   pitch: 90,
   holeMin: 8,
   holeMax: 70,
@@ -33,16 +33,15 @@ export default function StudioThumbnail({ className = "" }: { className?: string
       const ctx = cv.getContext("2d");
       if (!ctx) return;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.fillStyle = "#0d0d0d";
-      ctx.fillRect(0, 0, w, h);
+      ctx.clearRect(0, 0, w, h);
       const s = w / THUMB_SPEC.facadeW;
       const result = generateStudio(THUMB_SPEC);
       for (const p of result.panels) {
         const px = p.x * s;
         const py = h - (p.y + p.h) * s;
-        ctx.fillStyle = "#1f1f1f";
+        ctx.fillStyle = "#171717";
         ctx.fillRect(px, py, p.w * s, p.h * s);
-        ctx.fillStyle = "#e8e8e8";
+        ctx.fillStyle = "#8f8f8f";
         ctx.beginPath();
         for (const hole of p.holes) {
           const r = Math.max(0.4, (hole.d / 2) * s);
@@ -63,7 +62,7 @@ export default function StudioThumbnail({ className = "" }: { className?: string
   return (
     <canvas
       ref={ref}
-      className={`block aspect-[2/1] w-full bg-canvas ${className}`}
+      className={`block h-full w-full ${className}`}
       aria-label="Facade Studio preview: perforated elevation with an attractor gradient, panelled"
     />
   );
