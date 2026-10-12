@@ -1,9 +1,9 @@
 /**
  * Solar Fin Array — static-3d
  *
- * A row of vertical fins. Each fin turns to face the sun for the chosen
- * facade orientation, month and hour, so the facade closes against low
- * east/west sun and opens when the sun is behind it. Fin depth grades along
+ * A row of vertical fins. Each fin turns across the sun's rays for the chosen
+ * facade orientation, month and hour, so the facade closes against sun
+ * hitting it and opens when the sun is behind it. Fin depth grades along
  * the facade.
  *
  * Sun model (kept simple on purpose, see plan): solar noon due south
@@ -26,7 +26,7 @@ export const meta: PatternMeta = {
   slug: "solar-fin-array",
   name: "Solar Fin Array",
   description:
-    "A row of vertical fins that turn to face the sun for the facade's orientation, month and hour. Low east and west sun closes the facade; sun behind it opens it. Fin depth grades along the facade.",
+    "A row of vertical fins that turn across the sun for the facade's orientation, month and hour. Sun straight on closes the facade; sun behind it opens it. Fin depth grades along the facade.",
   tags: ["Louvre", "Brise-Soleil"],
   type: "static-3d",
   popularity: 80,
@@ -42,7 +42,7 @@ export const meta: PatternMeta = {
     { key: "month", label: "Month", min: 1, max: 12, step: 1, default: 6 },
     { key: "hour", label: "Hour", min: 6, max: 20, step: 0.25, default: 16 },
     { key: "tracking", label: "Fins", min: 0, max: 1, step: 1, default: 0, options: ["Follow Sun", "Fixed"] },
-    { key: "maxAngle", label: "Max Angle", min: 0, max: 90, step: 1, default: 70, unit: "°" },
+    { key: "maxAngle", label: "Max Angle", min: 0, max: 90, step: 1, default: 55, unit: "°" },
   ],
 };
 
@@ -67,14 +67,20 @@ export function sunRelative(staticParams: PatternParams): number {
   return ((((rel + 180) % 360) + 360) % 360) - 180;
 }
 
-/** Fin angle in degrees: turns towards the sun, clamped to ±maxAngle; 0 (open) when the sun is behind the facade. */
+/**
+ * Fin angle in degrees from the facade normal. Following the sun, each fin
+ * turns across the sun's rays (perpendicular to them) to block it: sun straight
+ * on closes the fins, oblique sun needs less turn. Clamped to ±maxAngle; 0
+ * (open) when the sun is behind the facade.
+ */
 export function getFinAngle(staticParams: PatternParams): number {
   const p = read(staticParams);
   const max = Math.max(0, Math.min(90, p.maxAngle));
   if (Math.round(p.tracking) === 1) return max;
   const rel = sunRelative(p);
   if (Math.abs(rel) >= 90) return 0;
-  return Math.max(-max, Math.min(max, rel));
+  const block = rel >= 0 ? rel - 90 : rel + 90;
+  return Math.max(-max, Math.min(max, block));
 }
 
 /** Fin depth for fin i: grades from (1 - gradient) × depth to depth along the facade. */
@@ -112,7 +118,7 @@ export function getGridExtents(staticParams: PatternParams): { width: number; he
 /** Elevation of the fins (visible width = thickness + depth × sin angle) over a plan strip. */
 export function generatePreviewSvg(staticParams?: PatternParams): string {
   const p = read(staticParams ?? {});
-  const n = Math.min(30, getElementCount(p));
+  const n = Math.min(16, getElementCount(p));
   const size = 800;
   const margin = 70;
   const usable = size - margin * 2;
