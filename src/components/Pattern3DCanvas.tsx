@@ -282,7 +282,7 @@ export default function Pattern3DCanvas({
             cameraZ * 0.28,
             cameraZ,
           ],
-          fov: 42,
+          fov: pattern.getFov?.(staticParams) ?? 42,
         }}
         gl={{ antialias: true, alpha: false }}
         onCreated={({ gl }) => {

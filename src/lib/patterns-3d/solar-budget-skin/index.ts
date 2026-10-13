@@ -12,7 +12,7 @@ import {
   defaultsFromMeta,
   staticDefaultsFromMeta,
 } from "../../patterns/shared/types";
-import { STROKE, STROKE_WIDTH } from "../../patterns/shared/math";
+import { STROKE } from "../../patterns/shared/math";
 import { ElementTransform, Static3DPatternModule } from "../shared/types";
 import {
   CELL,
@@ -55,22 +55,33 @@ const GAP = 2 * CELL; // between the arrays
 const ARRAY_W = COLS * CELL;
 const ARRAY_H = ROWS * CELL;
 /** Model shifted left so both arrays sit clear of the control panel on the right. */
-const SHIFT_X = -5;
+const SHIFT_X = -4.5;
+/**
+ * World units per metre. The canvas's OrbitControls clamps the camera to 60 units, so the
+ * model is drawn at 60/85 scale: a camera 60 units away frames it as 85 m away would.
+ */
+const WORLD = 60 / 85;
 const GLASS = CELL - 0.08;
-const T = 0.04; // element and glass thickness, m
+const T = 0.07; // element and glass thickness, m (drawing only; engine depth unchanged)
 const ZERO: [number, number, number] = [0, 0, 0];
 
+interface Solved {
+  key: string;
+  result: SolveResult;
+  minBare: number; // bare cooling gain range over the cells, kWh/m² yr
+  maxBare: number;
+}
+
 /** Solve for the 4 solve sliders, remembered for the last input (called per instance). */
-let last: { key: string; result: SolveResult } | null = null;
-function solved(p: P): SolveResult {
+let last: Solved | null = null;
+function solved(p: P): Solved {
   const key = `${p.orientation}|${p.latitude}|${p.target}|${p.maxDepth}`;
   if (!last || last.key !== key) {
-    last = {
-      key,
-      result: solve({ orientation: p.orientation, latitude: p.latitude, target: p.target, maxDepth: p.maxDepth }),
-    };
+    const result = solve({ orientation: p.orientation, latitude: p.latitude, target: p.target, maxDepth: p.maxDepth });
+    const bare = result.cells.map((c) => c.bareCooling);
+    last = { key, result, minBare: Math.min(...bare), maxBare: Math.max(...bare) };
   }
-  return last.result;
+  return last;
 }
 
 /** Cell origin (left edge x, top edge y) for an array; side 0 = bare, 1 = skin. */
@@ -88,15 +99,21 @@ export function getInstanceSize(): [number, number, number] {
 }
 
 export function getGridExtents(): { width: number; height: number } {
-  return { width: 2 * ARRAY_W + GAP, height: ARRAY_H };
+  return { width: (2 * ARRAY_W + GAP) * WORLD, height: ARRAY_H * WORLD };
 }
 
 export function getElementTransform(index: number, staticParams: PatternParams): ElementTransform {
+  const t = transformInMetres(index, staticParams);
+  const w = (v: [number, number, number]): [number, number, number] => [v[0] * WORLD, v[1] * WORLD, v[2] * WORLD];
+  return { position: w(t.position), rotation: t.rotation, scale: t.scale && w(t.scale) };
+}
+
+function transformInMetres(index: number, staticParams: PatternParams): ElementTransform {
   const p = read(staticParams);
   const cellIndex = Math.floor(index / PARTS);
   const part = index % PARTS;
   const row = Math.floor(cellIndex / COLS), col = cellIndex % COLS;
-  const cell = solved(p).cells[cellIndex];
+  const cell = solved(p).result.cells[cellIndex];
   const [x0, y0] = cellOrigin(part === 0 ? 0 : 1, row, col);
   const cx = x0 + CELL / 2, cy = y0 - CELL / 2;
   const none = { position: [cx, cy, 0] as [number, number, number], rotation: ZERO, scale: ZERO };
@@ -113,34 +130,53 @@ export function getElementTransform(index: number, staticParams: PatternParams):
   return { position: [x, cy, d / 2], rotation: ZERO, scale: [T, CELL, d] };
 }
 
-const BLUE: [number, number, number] = [0x55, 0x78, 0xb0];
-const ORANGE: [number, number, number] = [0xd0, 0x7a, 0x40];
-const ELEMENT = "#ffffff";
+type RGB = [number, number, number];
+const BLUE: RGB = [0x3a, 0x5a, 0x8c]; // skin glass at or below the Target
+const WARM: RGB = [0xc4, 0x7a, 0x48]; // bare maximum
+const DIM_WARM: RGB = [0x7a, 0x4d, 0x36]; // bare minimum
+const ELEMENT = "#c8c8c8";
 const CAPPED = "#8f8f8f";
 
-/** Heat tint: blue at or below the Target, orange at the bare maximum. One scale for both arrays. */
-function tint(gain: number, target: number, max: number): string {
-  const t = max > target ? Math.min(1, Math.max(0, (gain - target) / (max - target))) : 0;
-  const c = BLUE.map((b, i) => Math.round(b + (ORANGE[i] - b) * t));
-  return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+const mix = (a: RGB, b: RGB, t: number): RGB => a.map((v, i) => Math.round(v + (b[i] - v) * t)) as RGB;
+const css = (c: RGB) => `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
+
+/** Bare array, relative exposure scale: min -> max bare cooling gain over the cells, dim warm -> warm. Never blue (no bare cell meets the Target). */
+function bareTint(gain: number, s: Solved): RGB {
+  const t = s.maxBare > s.minBare ? clamp01((gain - s.minBare) / (s.maxBare - s.minBare)) : 1;
+  return mix(DIM_WARM, WARM, t);
+}
+
+/** Skin array, absolute Target scale: blue at or below the Target, warming towards the bare maximum above it. */
+function skinTint(gain: number, target: number, s: Solved): RGB {
+  const t = s.maxBare > target ? clamp01((gain - target) / (s.maxBare - target)) : 0;
+  return mix(BLUE, WARM, t);
 }
 
 export function getInstanceColor(index: number, staticParams: PatternParams): string {
   const p = read(staticParams);
-  const res = solved(p);
-  const cell = res.cells[Math.floor(index / PARTS)];
+  const s = solved(p);
+  const cell = s.result.cells[Math.floor(index / PARTS)];
   const part = index % PARTS;
-  const max = Math.max(...res.cells.map((c) => c.bareCooling));
-  if (part === 0) return tint(cell.bareCooling, p.target, max);
-  if (part === 1) return tint(cell.cooling, p.target, max);
+  if (part === 0) return css(bareTint(cell.bareCooling, s));
+  if (part === 1) return css(skinTint(cell.cooling, p.target, s));
   return cell.capped ? CAPPED : ELEMENT;
 }
 
-/** Front elevation, raised 12° so blades read as trapezoids. */
+/** Near-front view from above right (yaw 22°, pitch 22°), long lens (fov 14°) at 85 m so depth faces show. */
 export function getCameraPosition(): [number, number, number] {
-  const distance = 30;
-  const a = (12 * Math.PI) / 180;
-  return [0, distance * Math.sin(a), distance * Math.cos(a)];
+  const distance = 85 * WORLD;
+  const yaw = (22 * Math.PI) / 180;
+  const pitch = (22 * Math.PI) / 180;
+  return [
+    distance * Math.sin(yaw) * Math.cos(pitch),
+    distance * Math.sin(pitch),
+    distance * Math.cos(yaw) * Math.cos(pitch),
+  ];
+}
+
+export function getFov(): number {
+  return 14;
 }
 
 /** Light on the analysed sun (Month/Hour); null when the sun is below the horizon or behind the facade. */
@@ -153,35 +189,43 @@ export function getLightPosition(staticParams: PatternParams): [number, number, 
   return [x * r, y * r, z * r];
 }
 
-/** Gallery thumbnail: solved skin at the defaults, heat-tinted glass and element lines. No text. */
+/** Gallery thumbnail: solved skin at the defaults; glass warmed by bare exposure, element faces in oblique. No text. */
 export function generatePreviewSvg(staticParams?: PatternParams): string {
   const p = read(staticParams ?? {});
-  const res = solved(p);
+  const sol = solved(p);
   const size = 800;
-  const margin = 110;
-  const s = (size - margin * 2) / ARRAY_W; // px per m
-  const max = Math.max(...res.cells.map((c) => c.bareCooling));
-  const k = 0.45; // oblique: depth drawn up and to the left
-  const at = (x: number, y: number, z: number) => `${(margin + (x - z * k) * s).toFixed(1)},${(margin + (y - z * k) * s).toFixed(1)}`;
-  const line = `fill="none" stroke="${STROKE}" stroke-opacity="0.85" stroke-width="${STROKE_WIDTH}" vector-effect="non-scaling-stroke"`;
+  const k = 0.8; // oblique: depth drawn up and to the left
+  const margin = 90;
+  const s = (size - margin * 2) / (ARRAY_W + p.maxDepth * k); // px per m
+  const ox = margin + p.maxDepth * k * s, oy = margin + p.maxDepth * k * s * 0.5;
+  const at = (x: number, y: number, z: number) => `${(ox + (x - z * k) * s).toFixed(1)},${(oy + (y - z * k) * s).toFixed(1)}`;
+  const quad = (a: string, b: string, c: string, d: string, fill: string) =>
+    `<polygon points="${a} ${b} ${c} ${d}" fill="${fill}" stroke="${STROKE}" stroke-opacity="0.9" stroke-width="1.5" stroke-linejoin="round" vector-effect="non-scaling-stroke" />`;
   const parts: string[] = [];
-  for (const c of res.cells) {
+  const faces: string[] = [];
+  for (const c of sol.result.cells) {
     const x = c.col * CELL, y = c.row * CELL;
+    const tb = sol.maxBare > sol.minBare ? (c.bareCooling - sol.minBare) / (sol.maxBare - sol.minBare) : 1;
+    const glass = css(mix(BLUE, WARM, 0.6 * tb));
+    const g = 0.04;
     parts.push(
-      `<rect x="${(margin + (x + 0.04) * s).toFixed(1)}" y="${(margin + (y + 0.04) * s).toFixed(1)}" width="${(GLASS * s).toFixed(1)}" height="${(GLASS * s).toFixed(1)}" fill="${tint(c.cooling, p.target, max)}" fill-opacity="0.45" ${line} />`
+      `<rect x="${(ox + (x + g) * s).toFixed(1)}" y="${(oy + (y + g) * s).toFixed(1)}" width="${((CELL - 2 * g) * s).toFixed(1)}" height="${((CELL - 2 * g) * s).toFixed(1)}" fill="${glass}" fill-opacity="0.6" stroke="${STROKE}" stroke-opacity="0.5" stroke-width="1.5" vector-effect="non-scaling-stroke" />`
     );
     const d = c.depth;
     if (d <= 0) continue;
+    const el = "#0d0d0d";
     if (c.type === "blade" || c.type === "hood") {
-      parts.push(`<polygon points="${at(x, y, 0)} ${at(x + CELL, y, 0)} ${at(x + CELL, y, d)} ${at(x, y, d)}" ${line} />`);
+      faces.push(quad(at(x, y, 0), at(x + CELL, y, 0), at(x + CELL, y, d), at(x, y, d), el));
+      faces.push(quad(at(x, y, d), at(x + CELL, y, d), at(x + CELL, y + T, d), at(x, y + T, d), el));
     }
     if (c.type === "fins" || c.type === "hood") {
-      for (const fx of [x, x + CELL]) {
-        parts.push(`<polygon points="${at(fx, y, 0)} ${at(fx, y + CELL, 0)} ${at(fx, y + CELL, d)} ${at(fx, y, d)}" ${line} />`);
+      for (const fx of [x, x + CELL - T]) {
+        faces.push(quad(at(fx, y, 0), at(fx, y + CELL, 0), at(fx, y + CELL, d), at(fx, y, d), el));
+        faces.push(quad(at(fx, y, d), at(fx + T, y, d), at(fx + T, y + CELL, d), at(fx, y + CELL, d), el));
       }
     }
   }
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="100%" height="100%">${parts.join("")}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="100%" height="100%">${parts.join("")}${faces.join("")}</svg>`;
 }
 
 export const static3dModule: Static3DPatternModule = {
@@ -193,6 +237,7 @@ export const static3dModule: Static3DPatternModule = {
   getGridExtents,
   getInstanceColor,
   getCameraPosition,
+  getFov,
   getLightPosition,
   generatePreviewSvg,
 };

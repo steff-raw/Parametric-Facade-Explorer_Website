@@ -71,8 +71,12 @@ export interface Static3DPatternModule {
   };
   /** Optional per-instance colour (CSS colour). When omitted, no instance colours are set. */
   getInstanceColor?: (index: number, staticParams: PatternParams) => string;
-  /** Optional initial camera position. When omitted, the default 3/4 oblique view is used. */
+  /**
+   * Optional initial camera position and field of view (default 3/4 oblique view, fov 42).
+   * `getCameraPosition` and `getFov` are read once when the Canvas is created; they must not depend on params.
+   */
   getCameraPosition?: (staticParams: PatternParams) => [number, number, number];
+  getFov?: (staticParams: PatternParams) => number;
   /**
    * Optional key-light position. When omitted, the default light is used.
    * Returning null turns the key light and its shadows off.
