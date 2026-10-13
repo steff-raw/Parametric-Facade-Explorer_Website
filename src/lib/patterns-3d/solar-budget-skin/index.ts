@@ -177,10 +177,11 @@ export function getInstanceColor(index: number, staticParams: PatternParams): st
   const s = solved(p);
   const cell = s.result.cells[Math.floor(index / PARTS)];
   const part = index % PARTS;
-  // Sun below the horizon or behind the facade: no key light, so the glass recedes (x 0.75) and elements read.
+  // Sun below the horizon or behind the facade: no key light, so the skin glass recedes (x 0.75) and elements read.
+  // The bare array keeps its full exposure gradient.
   const k = getLightPosition(p) ? 1 : 0.75;
   const dim = (c: RGB): RGB => c.map((v) => Math.round(v * k)) as RGB;
-  if (part === 0) return css(dim(bareTint(cell.bareCooling, s)));
+  if (part === 0) return css(bareTint(cell.bareCooling, s));
   if (part === 1) return css(dim(skinTint(cell.cooling, p.target, s)));
   return cell.capped ? CAPPED : ELEMENT;
 }

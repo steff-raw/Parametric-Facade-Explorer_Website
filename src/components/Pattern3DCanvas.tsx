@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
@@ -223,6 +223,10 @@ function Scene({
   pattern: Static3DPatternModule;
   staticParams: PatternParams;
 }) {
+  const fitFov = useCallback(
+    (aspect: number) => pattern.getFov?.(staticParams, aspect) ?? 42,
+    [pattern, staticParams]
+  );
   const keyLight = pattern.getLightPosition
     ? pattern.getLightPosition(staticParams)
     : ([7, 10, 8] as [number, number, number]);
@@ -249,7 +253,7 @@ function Scene({
       <directionalLight position={[-6, 4, -5]} intensity={0.35} />
       <StaticInstances pattern={pattern} staticParams={staticParams} />
       {pattern.getFov && (
-        <FitFov fov={(a) => pattern.getFov!(staticParams, a)} />
+        <FitFov fov={fitFov} />
       )}
       <OrbitControls
         makeDefault
