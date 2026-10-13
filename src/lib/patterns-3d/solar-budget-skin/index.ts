@@ -58,9 +58,11 @@ const ARRAY_H = ROWS * CELL;
 const SHIFT_X = -4.5;
 /**
  * World units per metre. The canvas's OrbitControls clamps the camera to 60 units, so the
- * model is drawn at 60/85 scale: a camera 60 units away frames it as 85 m away would.
+ * model is drawn at 60/240 scale: a camera 60 units away frames it as 240 m away would.
  */
-const WORLD = 60 / 85;
+const WORLD = 60 / 240;
+/** Drawing joint at each end of an element; the engine assumes full cell width. */
+const INSET = 0.1;
 const GLASS = CELL - 0.08;
 const T = 0.07; // element and glass thickness, m (drawing only; engine depth unchanged)
 const ZERO: [number, number, number] = [0, 0, 0];
@@ -122,16 +124,19 @@ function transformInMetres(index: number, staticParams: PatternParams): ElementT
   if (d <= 0) return none;
   const blade = cell.type === "blade" || cell.type === "hood";
   const fins = cell.type === "fins" || cell.type === "hood";
+  // Drawing joint: elements stop INSET short of the cell edges; the engine assumes full cell width.
+  const inner = CELL - 2 * INSET;
   if (part === 2) {
-    return blade ? { position: [cx, y0 - T / 2, d / 2], rotation: ZERO, scale: [CELL, T, d] } : none;
+    return blade ? { position: [cx, y0 - INSET - T / 2, d / 2], rotation: ZERO, scale: [inner, T, d] } : none;
   }
   if (!fins) return none;
-  const x = part === 3 ? x0 + T / 2 : x0 + CELL - T / 2;
-  return { position: [x, cy, d / 2], rotation: ZERO, scale: [T, CELL, d] };
+  const x = part === 3 ? x0 + INSET + T / 2 : x0 + CELL - INSET - T / 2;
+  return { position: [x, cy, d / 2], rotation: ZERO, scale: [T, inner, d] };
 }
 
 type RGB = [number, number, number];
-const BLUE: RGB = [0x3a, 0x5a, 0x8c]; // skin glass at or below the Target
+const BLUE: RGB = [0x3a, 0x5a, 0x8c]; // thumbnail glass at or below the Target
+const SKIN_GLASS: RGB = [0xa0, 0xc4, 0xf0]; // 3D skin glass at or below the Target (lit at grazing sun, so brighter)
 const WARM: RGB = [0xc4, 0x7a, 0x48]; // bare maximum
 const DIM_WARM: RGB = [0x7a, 0x4d, 0x36]; // bare minimum
 const ELEMENT = "#c8c8c8";
@@ -150,7 +155,7 @@ function bareTint(gain: number, s: Solved): RGB {
 /** Skin array, absolute Target scale: blue at or below the Target, warming towards the bare maximum above it. */
 function skinTint(gain: number, target: number, s: Solved): RGB {
   const t = s.maxBare > target ? clamp01((gain - target) / (s.maxBare - target)) : 0;
-  return mix(BLUE, WARM, t);
+  return mix(SKIN_GLASS, WARM, t);
 }
 
 export function getInstanceColor(index: number, staticParams: PatternParams): string {
@@ -163,10 +168,10 @@ export function getInstanceColor(index: number, staticParams: PatternParams): st
   return cell.capped ? CAPPED : ELEMENT;
 }
 
-/** Near-front view from above right (yaw 22°, pitch 22°), long lens (fov 14°) at 85 m so depth faces show. */
+/** Near-front view from above right (yaw 10°, pitch 22°), long lens (fov 5°) at 240 m so depth faces show and verticals stay near-upright. */
 export function getCameraPosition(): [number, number, number] {
-  const distance = 85 * WORLD;
-  const yaw = (22 * Math.PI) / 180;
+  const distance = 240 * WORLD;
+  const yaw = (10 * Math.PI) / 180;
   const pitch = (22 * Math.PI) / 180;
   return [
     distance * Math.sin(yaw) * Math.cos(pitch),
@@ -176,7 +181,7 @@ export function getCameraPosition(): [number, number, number] {
 }
 
 export function getFov(): number {
-  return 14;
+  return 5;
 }
 
 /** Light on the analysed sun (Month/Hour); null when the sun is below the horizon or behind the facade. */
