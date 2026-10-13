@@ -1,39 +1,50 @@
 /**
  * localStorage persistence for saved pattern variations.
  * No auth / backend for v1.
+ *
+ * Entries are validated on load (see storage-validate.ts): unknown slugs,
+ * non-finite numbers and out-of-range enum values are dropped.
+ * Storage access is wrapped so private mode / quota errors never throw.
  */
 
-import { PatternParams } from "./patterns";
+import { PatternParams, getPattern } from "./patterns";
+import { SavedVariation, parseCollected } from "./storage-validate";
+
+export type { SavedVariation };
 
 const STORAGE_KEY = "pfe-collected-v1";
 
-export interface SavedVariation {
-  id: string;
-  slug: string;
-  name: string;
-  params: PatternParams;
-  savedAt: string;
-}
-
-function canUseStorage(): boolean {
-  return typeof window !== "undefined" && !!window.localStorage;
-}
-
-export function loadCollected(): SavedVariation[] {
-  if (!canUseStorage()) return [];
+function getStorage(): Storage | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as SavedVariation[];
-    return Array.isArray(parsed) ? parsed : [];
+    if (typeof window === "undefined") return null;
+    return window.localStorage ?? null;
   } catch {
-    return [];
+    return null;
   }
 }
 
-export function saveCollected(items: SavedVariation[]): void {
-  if (!canUseStorage()) return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+export function loadCollected(): SavedVariation[] {
+  const storage = getStorage();
+  if (!storage) return [];
+  let raw: string | null = null;
+  try {
+    raw = storage.getItem(STORAGE_KEY);
+  } catch {
+    return [];
+  }
+  return parseCollected(raw, getPattern);
+}
+
+/** Returns false when the write failed (private mode, quota, blocked storage). */
+export function saveCollected(items: SavedVariation[]): boolean {
+  const storage = getStorage();
+  if (!storage) return false;
+  try {
+    storage.setItem(STORAGE_KEY, JSON.stringify(items));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function addVariation(
