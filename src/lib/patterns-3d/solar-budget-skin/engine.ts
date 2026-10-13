@@ -43,7 +43,16 @@ export interface Context {
 }
 
 export const DEFAULT_PARAMS: SolveParams = { orientation: 180, latitude: 51.5, target: 90, maxDepth: 0.6 };
-export const DEFAULT_CONTEXT: Context = { rows: 8, cols: 8, blockHeight: 25, blockDistance: 20, blockWidthShare: 0.6 };
+export const DEFAULT_CONTEXT: Context = { rows: 8, cols: 8, blockHeight: 25, blockDistance: 12, blockWidthShare: 0.6 };
+
+/** Footnote copy (fixed inputs and model limits). */
+export const FOOTNOTES = [
+  "Context block modelled as a wall facing the facade; its depth is ignored.",
+  "Facade from ground level, 8 rows x 1.5 m = 12 m.",
+  "Block 25 m high, 12 m away.",
+  "12 deg dome resolution: column steps of a few cm are model resolution.",
+];
+export const VIEW_OUT_LABEL = "View-out (cosine-weighted)";
 
 // ---------------------------------------------------------------- sun
 
@@ -193,6 +202,31 @@ export function unshaded(type: ElementType, d: number, tanV: number, tanH: numbe
   return (1 - fh) * (1 - fv);
 }
 
+/**
+ * View-out %: cosine-weighted share of the outward hemisphere left open by the element.
+ * Up-views = dome patches in front of the facade; down-views = the same directions
+ * mirrored below horizontal (the head blade cannot block them). Block ignored.
+ */
+const localDomeCache = new Map<number, [number, number, number][]>();
+
+export function viewOut(type: ElementType, d: number, orientation: number): number {
+  let local = localDomeCache.get(orientation);
+  if (!local) {
+    local = DOME.map((p) => toFacade(p.vec, orientation));
+    if (localDomeCache.size > 64) localDomeCache.clear();
+    localDomeCache.set(orientation, local);
+  }
+  let open = 0, all = 0;
+  for (let i = 0; i < DOME.length; i++) {
+    const [x, y, z] = local[i];
+    if (z <= 1e-9) continue;
+    const w = z * DOME[i].omega;
+    open += w * (unshaded(type, d, y / z, x / z) + unshaded(type, d, -y / z, x / z));
+    all += 2 * w;
+  }
+  return (100 * open) / all;
+}
+
 // ---------------------------------------------------------------- context
 
 /** Cell centre in facade-local metres. Row 0 = top, col 0 = left seen from outside. */
@@ -200,7 +234,7 @@ function cellCentre(r: number, c: number, ctx: Context): [number, number] {
   return [(c + 0.5) * CELL, (ctx.rows - r - 0.5) * CELL];
 }
 
-/** True if the ray from the cell centre towards local direction v hits the block face. */
+/** Ray-wall test: true if the ray from the cell centre towards local direction v hits the block wall. */
 function blocked(x0: number, y0: number, v: [number, number, number], ctx: Context): boolean {
   if (ctx.blockHeight <= 0 || v[2] <= 0) return false;
   const t = ctx.blockDistance / v[2];
@@ -281,6 +315,7 @@ export interface CellResult {
   heating: number;
   bareGlare: number;
   glare: number;
+  viewOut: number; // %, bare = 100
 }
 
 export interface SolveResult {
@@ -294,6 +329,7 @@ export interface SolveResult {
     winterKept: number; // %
     bareGlare: number; // h/yr
     skinGlare: number;
+    viewOut: number; // %, skin cells area-averaged; bare = 100
   };
   labels: ReturnType<typeof seasonLabels>;
 }
@@ -363,6 +399,7 @@ export function solve(params: Partial<SolveParams> = {}, context: Partial<Contex
         heating: gain(view, s.heating, pick.type, pick.depth),
         bareGlare: glareHours(r, c, sun, ctx, "none", 0),
         glare: glareHours(r, c, sun, ctx, pick.type, pick.depth),
+        viewOut: viewOut(pick.type, pick.depth, p.orientation),
       });
     }
   }
@@ -379,6 +416,7 @@ export function solve(params: Partial<SolveParams> = {}, context: Partial<Contex
       winterKept: bareHeat > 0 ? (100 * mean((c) => c.heating)) / bareHeat : 100,
       bareGlare: mean((c) => c.bareGlare),
       skinGlare: mean((c) => c.glare),
+      viewOut: mean((c) => c.viewOut),
     },
     labels: seasonLabels(p.latitude),
   };
@@ -392,4 +430,5 @@ export function clearCaches(): void {
   skyCache.clear();
   geomCache.clear();
   solveCache.clear();
+  localDomeCache.clear();
 }

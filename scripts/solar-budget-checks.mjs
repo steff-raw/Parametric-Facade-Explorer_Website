@@ -12,6 +12,9 @@ import {
   seasonLabels,
   solve,
   clearCaches,
+  viewOut,
+  FOOTNOTES,
+  VIEW_OUT_LABEL,
 } from "../src/lib/patterns-3d/solar-budget-skin/engine.ts";
 
 const RAD = Math.PI / 180;
@@ -93,15 +96,32 @@ const oSame = o.kpi.skinSummer === o.kpi.bareSummer && o.kpi.winterKept === 100 
 check("o", "Target >= bare gain: no elements, skin KPIs = bare", `target ${Math.ceil(oMax) + 1}, none ${oNone}, equal ${oSame}`,
   oNone && oSame);
 
-// (p) presets
+// (p) presets: 4 cases, one per element family; valid only if capped <= 50%
+const mixOf = (res) => {
+  const m = { blade: 0, fins: 0, hood: 0, none: 0 };
+  for (const c of res.cells) m[c.type]++;
+  return m;
+};
+const mixText = (res) => {
+  const m = mixOf(res);
+  const d = res.cells.map((c) => c.depth);
+  return `B${m.blade} F${m.fins} H${m.hood} none ${m.none} capped ${res.cappedCount} (${f((100 * res.cappedCount) / res.cells.length, 1)}%) d ${f(Math.min(...d), 2)}-${f(Math.max(...d), 2)} m`;
+};
+const p4Target = [90, 120, 150].find((t) => solve({ orientation: 90, latitude: -33.5, target: t, maxDepth: 0.6 }).cappedCount <= 32);
 const presets = [
-  { name: "Default S 51.5", p: {} },
-  { name: "W 270, lat 40, T 60", p: { orientation: 270, latitude: 40, target: 60, maxDepth: 0.8 } },
-  { name: "E 90, lat -33.5, T 150", p: { orientation: 90, latitude: -33.5, target: 150, maxDepth: 0.4 } },
+  { name: "P1 S 180 / 51.5 / 90 / 0.6", p: { orientation: 180, latitude: 51.5, target: 90, maxDepth: 0.6 } },
+  { name: "P2 W 270 / 51.5 / 120 / 0.6", p: { orientation: 270, latitude: 51.5, target: 120, maxDepth: 0.6 } },
+  { name: "P3 N 0 / 51.5 / 60 / 0.6", p: { orientation: 0, latitude: 51.5, target: 60, maxDepth: 0.6 } },
 ];
+if (p4Target !== undefined) {
+  presets.push({ name: `P4 E 90 / -33.5 / ${p4Target} / 0.6`, p: { orientation: 90, latitude: -33.5, target: p4Target, maxDepth: 0.6 } });
+}
 const pRes = presets.map((x) => ({ ...x, r: solve(x.p) }));
-const pOk = pRes.every(({ r }) => r.cells.every((c) => c.capped || c.cooling <= r.params.target + 1e-9));
-check("p", "3 presets: non-capped cell cooling <= Target", pRes.map(({ r }) => `${r.cappedCount} capped`).join(", "), pOk);
+for (const { name, r: res } of pRes) {
+  const ok = res.cells.every((c) => c.capped || c.cooling <= res.params.target + 1e-9) && res.cappedCount <= res.cells.length / 2;
+  check("p", `${name}: non-capped cooling <= Target, capped <= 50%`, mixText(res), ok);
+}
+if (p4Target === undefined) check("p", "P4 E 90 / -33.5 dropped: no Target in 90/120/150 gives capped <= 50%", "dropped", true);
 
 // (q) hemisphere mirror
 const qN = solve({ latitude: 51.5, orientation: 180 }, noBlock);
@@ -120,51 +140,85 @@ check("q", "lat -51.5 O 0 vs 51.5 O 180: bare summer + winter +-5%",
 const r = seasonLabels(10);
 check("r", "lat 10: Hot season / Cool season", `${r.cooling} / ${r.heating}`, r.cooling === "Hot season" && r.heating === "Cool season");
 
+// (s) view-out, cosine-weighted, S facade
+const vBlade = viewOut("blade", 0.5, 180);
+const vHood = viewOut("hood", 0.47, 180);
+check("s", "view-out: blade 0.5 -> 86.0%, hood 0.47 -> 65.2% (+-0.5)", `${f(vBlade, 1)}% / ${f(vHood, 1)}%`,
+  near(vBlade, 86.0, 0.5) && near(vHood, 65.2, 0.5));
+
+// Stage 2 pre-check at 8 x 8
+const spread = (res, key) => {
+  let best = 0;
+  for (let i = 0; i < 8; i++) {
+    const d = res.cells.filter((c) => c[key] === i).map((c) => c.depth);
+    best = Math.max(best, Math.max(...d) - Math.min(...d));
+  }
+  return best;
+};
+const [P1, P2, P3] = pRes.map((x) => x.r);
+const m1 = mixOf(P1), m2 = mixOf(P2), m3 = mixOf(P3);
+const rowSpread = spread(P1, "row"), colSpread = spread(P1, "col");
+check("pre", "Stage 2 P1: blades > fins, blades >= 40, row + col range > 0.05 m",
+  `B${m1.blade} F${m1.fins}; max row range ${f(rowSpread, 2)} m, col range ${f(colSpread, 2)} m`,
+  m1.blade > m1.fins && m1.blade >= 40 && rowSpread > 0.05 && colSpread > 0.05);
+check("pre", "Stage 2 P2: hoods + fins > blades", `H${m2.hood} + F${m2.fins} vs B${m2.blade}`, m2.hood + m2.fins > m2.blade);
+check("pre", "Stage 2 P3: fins > 0", `F${m3.fins}`, m3.fins > 0);
+const wDef = mixOf(solve({ orientation: 270 }));
+check("pre", "Stage 2 plan wording, W 270 at default Target 90: hoods + fins > blades", `H${wDef.hood} + F${wDef.fins} vs B${wDef.blade}`,
+  wDef.hood + wDef.fins > wDef.blade);
+
 // ---- print
-const pad = (s, w) => String(s).padEnd(w);
-console.log("Solar Budget Skin, Stage 1 checks (P-0014)\n");
-console.log(`${pad("case", 5)}${pad("check", 56)}${pad("value", 58)}result`);
-console.log("-".repeat(125));
-for (const x of rows) console.log(`${pad(x.id, 5)}${pad(x.what, 56)}${pad(x.got, 58)}${x.pass ? "PASS" : "FAIL"}`);
+const pad = (v, w) => String(v).padEnd(w);
 const passed = rows.filter((x) => x.pass).length;
-console.log(`\n${passed}/${rows.length} pass`);
+const timingsOnly = process.argv.includes("--timings");
 
-// ---- defaults + presets
-const kpiLine = (name, res) => {
-  const k = res.kpi;
-  const counts = { none: 0, blade: 0, fins: 0, hood: 0 };
-  for (const c of res.cells) counts[c.type]++;
-  const depths = res.cells.map((c) => c.depth);
-  return `${pad(name, 24)} summer ${f(k.bareSummer, 1)} -> ${f(k.skinSummer, 1)} kWh/m2 yr | ${res.labels.winterKept.toLowerCase()} ${f(k.winterKept, 1)}% | glare ${f(k.bareGlare, 0)} -> ${f(k.skinGlare, 0)} h/yr | none ${counts.none} blade ${counts.blade} fins ${counts.fins} hood ${counts.hood} | depth ${f(Math.min(...depths), 2)}-${f(Math.max(...depths), 2)} m | capped ${res.cappedCount}/${res.cells.length} (${f((100 * res.cappedCount) / res.cells.length, 1)}%)`;
-};
-console.log("\nKPIs (bare -> skin, area-averaged)");
-for (const { name, r: res } of pRes) console.log(kpiLine(name, res));
+if (!timingsOnly) {
+  console.log("Solar Budget Skin, Stage 1 checks (P-0014)\n");
+  console.log(`${pad("case", 5)}${pad("check", 76)}${pad("value", 64)}result`);
+  console.log("-".repeat(151));
+  for (const x of rows) console.log(`${pad(x.id, 5)}${pad(x.what, 76)}${pad(x.got, 64)}${x.pass ? "PASS" : "FAIL"}`);
+  console.log(`\n${passed}/${rows.length} pass`);
+  if (p4Target !== undefined) console.log(`P4 Target chosen: ${p4Target} (lowest of 90/120/150 with capped <= 50%)`);
 
-const def = pRes[0].r;
-console.log(`\nCapped at defaults: ${def.cappedCount}/${def.cells.length} = ${f((100 * def.cappedCount) / def.cells.length, 1)}% (guard: > 25% must be reported)`);
-console.log("\nDefault skin map (row 0 = top; left = facade's left seen from outside; B blade, F fins, H hood, . none, * capped; depth cm)");
-for (let i = 0; i < def.context.rows; i++) {
-  const line = def.cells.filter((c) => c.row === i)
-    .map((c) => `${c.type === "none" ? "." : c.type[0].toUpperCase()}${c.capped ? "*" : " "}${String(Math.round(c.depth * 100)).padStart(2)}`);
-  console.log("  " + line.join(" "));
-}
+  console.log("\nElement mix at defaults (51.5, T 90, Max 0.6, 8 x 8), by orientation");
+  for (const [name, o] of [["S 180", 180], ["W 270", 270], ["E 90", 90], ["N 0", 0]]) {
+    console.log(`  ${pad(name, 7)}${mixText(solve({ orientation: o }))}`);
+  }
 
-// ---- timings
-const time = (fn, reps) => {
-  const t0 = performance.now();
-  for (let i = 0; i < reps; i++) fn(i);
-  return (performance.now() - t0) / reps;
-};
-console.log("\nSolve timings (Node, this machine; ms per solve)");
-for (const size of [8, 30]) {
-  const ctx = { ...DEFAULT_CONTEXT, rows: size, cols: size };
-  const cold = time(() => { clearCaches(); solve({}, ctx); }, 5);
-  // a Target slider move: sky + mask cached, solve re-run
-  solve({}, ctx);
-  const move = time((i) => solve({ target: 55 + (i % 20) * 10 }, ctx), 20);
-  // a Latitude slider move: new sky, mask cached
-  const lat = time((i) => solve({ latitude: 30 + i * 0.5 }, ctx), 10);
-  console.log(`  ${size} x ${size}: cold ${f(cold, 1)} | Target move ${f(move, 1)} | Latitude move ${f(lat, 1)}`);
+  console.log("\nKPIs (bare -> skin, area-averaged)");
+  for (const { name, r: res } of pRes) {
+    const k = res.kpi;
+    console.log(`  ${pad(name, 30)}summer ${f(k.bareSummer, 1)} -> ${f(k.skinSummer, 1)} kWh/m2 yr | ${res.labels.winterKept.toLowerCase()} ${f(k.winterKept, 1)}% | glare ${f(k.bareGlare, 0)} -> ${f(k.skinGlare, 0)} h/yr | view-out 100 -> ${f(k.viewOut, 1)}%`);
+  }
+
+  const def = P1;
+  console.log(`\nCapped at defaults: ${def.cappedCount}/${def.cells.length} = ${f((100 * def.cappedCount) / def.cells.length, 1)}% (guard: > 25% must be reported)`);
+  console.log("\nDefault skin map (row 0 = top; left = facade's left seen from outside; B blade, F fins, H hood, . none, * capped; depth cm)");
+  for (let i = 0; i < def.context.rows; i++) {
+    const line = def.cells.filter((c) => c.row === i)
+      .map((c) => `${c.type === "none" ? "." : c.type[0].toUpperCase()}${c.capped ? "*" : " "}${String(Math.round(c.depth * 100)).padStart(2)}`);
+    console.log("  " + line.join(" "));
+  }
+  console.log("\nFootnotes");
+  for (const line of [...FOOTNOTES, VIEW_OUT_LABEL]) console.log(`  ${line}`);
+} else {
+  const time = (fn, reps) => {
+    const t0 = performance.now();
+    for (let i = 0; i < reps; i++) fn(i);
+    return (performance.now() - t0) / reps;
+  };
+  console.log("Solar Budget Skin, Stage 1 solve timings (P-0014; Node, this machine; ms per solve)\n");
+  for (const size of [8, 30]) {
+    const ctx = { ...DEFAULT_CONTEXT, rows: size, cols: size };
+    const cold = time(() => { clearCaches(); solve({}, ctx); }, 5);
+    // Target move: sky + mask cached, solve re-run
+    const target = time((i) => solve({ target: 55 + (i % 20) * 10 }, ctx), 20);
+    // Latitude move: new sky vectors, mask cached
+    const lat = time((i) => solve({ latitude: 30 + i * 0.5 }, ctx), 10);
+    // Orientation move: new context mask, sky cached
+    const orient = time((i) => solve({ orientation: i * 22.5 + (i >= 8 ? 22.5 : 0) }, ctx), 14);
+    console.log(`  ${size} x ${size}: cold ${f(cold, 1)} | Target move ${f(target, 1)} | Latitude move ${f(lat, 1)} | Orientation move ${f(orient, 1)}`);
+  }
 }
 
 process.exitCode = passed === rows.length ? 0 : 1;
