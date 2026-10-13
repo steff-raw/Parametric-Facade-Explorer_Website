@@ -24,6 +24,16 @@ import {
   toFacade,
 } from "./engine";
 
+const COMPASS = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+export const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** 16-point compass name for an azimuth in degrees (clockwise from north). */
+export function compass(azimuth: number): string {
+  return COMPASS[Math.round((((azimuth % 360) + 360) % 360) / 22.5) % 16];
+}
+export const formatLatitude = (v: number) => `${Math.abs(v).toFixed(1)}° ${v < 0 ? "S" : "N"}`;
+export const formatHour = (v: number) => `${String(Math.round(v)).padStart(2, "0")}:00 solar`;
+
 export const meta: PatternMeta = {
   slug: "solar-budget-skin",
   name: "Solar Budget Skin",
@@ -34,12 +44,12 @@ export const meta: PatternMeta = {
   popularity: 75,
   createdAt: "2026-10-13",
   staticParams: [
-    { key: "orientation", label: "Orientation", min: 0, max: 337.5, step: 22.5, default: 180, unit: "°" },
-    { key: "latitude", label: "Latitude", min: -60, max: 60, step: 0.5, default: 51.5, unit: "°" },
-    { key: "target", label: "Target", min: 20, max: 300, step: 10, default: 90, unit: "kWh/m²" },
-    { key: "maxDepth", label: "Max depth", min: 0.1, max: 0.8, step: 0.05, default: 0.6, unit: "m" },
-    { key: "month", label: "Month (sun view, 1-12)", min: 1, max: 12, step: 1, default: 6 },
-    { key: "hour", label: "Hour (sun view)", min: 5, max: 19, step: 1, default: 14, unit: "h solar" },
+    { key: "orientation", label: "Orientation", min: 0, max: 337.5, step: 22.5, default: 180, format: (v) => `${compass(v)} ${v}°` },
+    { key: "latitude", label: "Latitude", min: -60, max: 60, step: 0.5, default: 51.5, format: formatLatitude },
+    { key: "target", label: "Target", min: 20, max: 300, step: 10, default: 90, format: (v) => `${v} kWh/m²` },
+    { key: "maxDepth", label: "Max depth", min: 0.1, max: 0.8, step: 0.05, default: 0.6, format: (v) => `${v.toFixed(2)} m` },
+    { key: "month", label: "Month (sun view)", min: 1, max: 12, step: 1, default: 6, format: (v) => MONTHS[Math.round(v) - 1] },
+    { key: "hour", label: "Hour (sun view)", min: 5, max: 19, step: 1, default: 14, format: formatHour },
   ],
 };
 
@@ -54,8 +64,6 @@ const PARTS = 5; // bare glass, skin glass, blade, left fin, right fin
 const GAP = 2 * CELL; // between the arrays
 const ARRAY_W = COLS * CELL;
 const ARRAY_H = ROWS * CELL;
-/** Model shifted left so both arrays sit clear of the control panel on the right. */
-const SHIFT_X = -4.5;
 /**
  * World units per metre. The canvas's OrbitControls clamps the camera to 60 units, so the
  * model is drawn at 60/240 scale: a camera 60 units away frames it as 240 m away would.
@@ -65,6 +73,7 @@ const WORLD = 60 / 240;
 const INSET = 0.1;
 const GLASS = CELL - 0.08;
 const T = 0.07; // element and glass thickness, m (drawing only; engine depth unchanged)
+const FIN_T = 0.12; // fins drawn thicker so their front face reads at 1280 (drawing only)
 const ZERO: [number, number, number] = [0, 0, 0];
 
 interface Solved {
@@ -72,6 +81,11 @@ interface Solved {
   result: SolveResult;
   minBare: number; // bare cooling gain range over the cells, kWh/m² yr
   maxBare: number;
+}
+
+/** Solve result for the current solve sliders (shared by the canvas and the overlay). */
+export function getSolve(staticParams: PatternParams): SolveResult {
+  return solved(read(staticParams)).result;
 }
 
 /** Solve for the 4 solve sliders, remembered for the last input (called per instance). */
@@ -88,7 +102,7 @@ function solved(p: P): Solved {
 
 /** Cell origin (left edge x, top edge y) for an array; side 0 = bare, 1 = skin. */
 function cellOrigin(side: number, row: number, col: number): [number, number] {
-  const left = SHIFT_X + (side === 0 ? -(GAP / 2 + ARRAY_W) : GAP / 2);
+  const left = side === 0 ? -(GAP / 2 + ARRAY_W) : GAP / 2;
   return [left + col * CELL, ARRAY_H / 2 - row * CELL];
 }
 
@@ -130,15 +144,15 @@ function transformInMetres(index: number, staticParams: PatternParams): ElementT
     return blade ? { position: [cx, y0 - INSET - T / 2, d / 2], rotation: ZERO, scale: [inner, T, d] } : none;
   }
   if (!fins) return none;
-  const x = part === 3 ? x0 + INSET + T / 2 : x0 + CELL - INSET - T / 2;
-  return { position: [x, cy, d / 2], rotation: ZERO, scale: [T, inner, d] };
+  const x = part === 3 ? x0 + INSET + FIN_T / 2 : x0 + CELL - INSET - FIN_T / 2;
+  return { position: [x, cy, d / 2], rotation: ZERO, scale: [FIN_T, inner, d] };
 }
 
 type RGB = [number, number, number];
 const BLUE: RGB = [0x3a, 0x5a, 0x8c]; // thumbnail glass at or below the Target
 const SKIN_GLASS: RGB = [0xa0, 0xc4, 0xf0]; // 3D skin glass at or below the Target (lit at grazing sun, so brighter)
 const WARM: RGB = [0xc4, 0x7a, 0x48]; // bare maximum
-const DIM_WARM: RGB = [0x7a, 0x4d, 0x36]; // bare minimum
+const DIM_WARM: RGB = [0x8a, 0x5a, 0x40]; // bare minimum
 const ELEMENT = "#c8c8c8";
 const CAPPED = "#8f8f8f";
 
@@ -180,9 +194,40 @@ export function getCameraPosition(): [number, number, number] {
   ];
 }
 
-export function getFov(): number {
-  return 5;
+const DISTANCE = 240; // m, equivalent camera distance
+/** Width the arrays may fill: 72% leaves room for the element key; 88% on portrait (phone) canvases. */
+const fitWidth = (aspect: number) => (2 * ARRAY_W + GAP) / (aspect < 1 ? 0.88 : 0.72);
+
+/** Field of view (deg): 5° long lens, widened only when the canvas is too narrow to fit both arrays. */
+export function getFov(_staticParams?: PatternParams, aspect = 2): number {
+  const fitHeight = fitWidth(aspect) / aspect;
+  return Math.max(5, (2 * Math.atan(fitHeight / 2 / DISTANCE) * 180) / Math.PI);
 }
+
+/**
+ * Screen position (px) of a model point (m) in a canvas of width x height, using the same camera
+ * as the 3D view (lookAt the origin, up +y). Used by the overlay to place labels and the sun arc.
+ */
+export function screenPoint(point: [number, number, number], width: number, height: number): [number, number] {
+  const c = getCameraPosition().map((v) => v / WORLD);
+  const len = (v: number[]) => Math.hypot(v[0], v[1], v[2]);
+  const f = c.map((v) => -v / len(c));
+  const r = [-f[2], 0, f[0]].map((v, _i, a) => v / len(a)); // f x up
+  const u = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]];
+  const d = point.map((v, i) => v - c[i]);
+  const dot = (a: number[]) => a[0] * d[0] + a[1] * d[1] + a[2] * d[2];
+  const t = Math.tan(((getFov(undefined, width / height) / 2) * Math.PI) / 180);
+  const z = dot(f);
+  return [((dot(r) / z / (t * (width / height)) + 1) / 2) * width, ((1 - dot(u) / z / t) / 2) * height];
+}
+
+/** Array outlines in model metres: x ranges of the bare and skin arrays, top and bottom y. */
+export const LAYOUT = {
+  bare: [-(GAP / 2 + ARRAY_W), -GAP / 2] as [number, number],
+  skin: [GAP / 2, GAP / 2 + ARRAY_W] as [number, number],
+  top: ARRAY_H / 2,
+  bottom: -ARRAY_H / 2,
+};
 
 /** Light on the analysed sun (Month/Hour); null when the sun is below the horizon or behind the facade. */
 export function getLightPosition(staticParams: PatternParams): [number, number, number] | null {

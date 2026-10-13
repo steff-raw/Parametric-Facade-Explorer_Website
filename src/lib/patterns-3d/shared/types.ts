@@ -76,7 +76,8 @@ export interface Static3DPatternModule {
    * `getCameraPosition` and `getFov` are read once when the Canvas is created; they must not depend on params.
    */
   getCameraPosition?: (staticParams: PatternParams) => [number, number, number];
-  getFov?: (staticParams: PatternParams) => number;
+  /** When set, the canvas also re-reads it with the canvas aspect on resize (width fit). */
+  getFov?: (staticParams: PatternParams, aspect?: number) => number;
   /**
    * Optional key-light position. When omitted, the default light is used.
    * Returning null turns the key light and its shadows off.

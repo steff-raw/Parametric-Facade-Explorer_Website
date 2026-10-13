@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import {
@@ -206,6 +206,16 @@ function StaticInstances({
   );
 }
 
+/** Width fit: re-reads the module's fov with the canvas aspect (only for modules with getFov). */
+function FitFov({ fov }: { fov: (aspect: number) => number }) {
+  const { camera, size } = useThree();
+  useEffect(() => {
+    (camera as THREE.PerspectiveCamera).fov = fov(size.width / size.height);
+    camera.updateProjectionMatrix();
+  }, [camera, size, fov]);
+  return null;
+}
+
 function Scene({
   pattern,
   staticParams,
@@ -238,6 +248,9 @@ function Scene({
       )}
       <directionalLight position={[-6, 4, -5]} intensity={0.35} />
       <StaticInstances pattern={pattern} staticParams={staticParams} />
+      {pattern.getFov && (
+        <FitFov fov={(a) => pattern.getFov!(staticParams, a)} />
+      )}
       <OrbitControls
         makeDefault
         enablePan

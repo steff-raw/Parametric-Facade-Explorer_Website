@@ -12,6 +12,7 @@ function formatValue(
   value: number,
   def: PatternParamDef
 ): string {
+  if (def.format) return def.format(value);
   if (def.options && def.options.length > 0) {
     const idx = Math.round(value) - Math.round(def.min);
     return def.options[idx] ?? String(Math.round(value));

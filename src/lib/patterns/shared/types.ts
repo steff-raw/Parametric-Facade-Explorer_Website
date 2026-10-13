@@ -23,6 +23,8 @@ export interface PatternParamDef {
   unit?: string;
   /** Discrete labels for step-1 enums (indexed from min) */
   options?: string[];
+  /** Optional value label (overrides unit and options in the slider readout) */
+  format?: (value: number) => string;
 }
 
 export interface PatternMeta {
