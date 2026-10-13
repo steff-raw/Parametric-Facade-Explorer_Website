@@ -33,7 +33,7 @@ Each pattern lives in its own named folder — edit by opening that folder:
 
 Shared helpers: `src/lib/patterns/shared/` and `src/lib/patterns-3d/shared/`. Registry: `index.ts` in each tree.
 
-3D patterns use Three.js via `@react-three/fiber` — static-3d via `Pattern3DCanvas` (shadows + optional backing plane), kinetic-3d via `KineticPatternCanvas`. Pipeline check: `/test-3d`.
+3D patterns use Three.js via `@react-three/fiber` — static-3d via `Pattern3DCanvas` (shadows + optional backing plane), kinetic-3d via `KineticPatternCanvas`.
 
 ## Deploy
 
