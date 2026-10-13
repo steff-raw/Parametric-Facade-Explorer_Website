@@ -155,13 +155,12 @@ const spread = (res, key) => {
   }
   return best;
 };
-const [P1, P2, P3] = pRes.map((x) => x.r);
-const m1 = mixOf(P1), m2 = mixOf(P2), m3 = mixOf(P3);
+const [P1, , P3] = pRes.map((x) => x.r);
+const m1 = mixOf(P1), m3 = mixOf(P3);
 const rowSpread = spread(P1, "row"), colSpread = spread(P1, "col");
 check("pre", "Stage 2 P1: blades > fins, blades >= 40, row + col range > 0.05 m",
   `B${m1.blade} F${m1.fins}; max row range ${f(rowSpread, 2)} m, col range ${f(colSpread, 2)} m`,
   m1.blade > m1.fins && m1.blade >= 40 && rowSpread > 0.05 && colSpread > 0.05);
-check("pre", "Stage 2 P2: hoods + fins > blades", `H${m2.hood} + F${m2.fins} vs B${m2.blade}`, m2.hood + m2.fins > m2.blade);
 check("pre", "Stage 2 P3: fins > 0", `F${m3.fins}`, m3.fins > 0);
 const wDef = mixOf(solve({ orientation: 270 }));
 check("pre", "Stage 2 plan wording, W 270 at default Target 90: hoods + fins > blades", `H${wDef.hood} + F${wDef.fins} vs B${wDef.blade}`,
