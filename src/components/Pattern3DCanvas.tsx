@@ -116,6 +116,7 @@ function StaticInstances({
   const panelRef = useRef<THREE.InstancedMesh>(null);
   const frameRef = useRef<THREE.InstancedMesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
+  const color = useMemo(() => new THREE.Color(), []);
 
   const panelGeo = useMemo(
     () => buildPanelGeometry(size, offset),
@@ -137,6 +138,17 @@ function StaticInstances({
       writeMatrices(panelRef.current, count, dummy, (i) =>
         pattern.getElementTransform(i, staticParams)
       );
+      if (pattern.getInstanceColor) {
+        for (let i = 0; i < count; i++) {
+          panelRef.current.setColorAt(
+            i,
+            color.set(pattern.getInstanceColor(i, staticParams))
+          );
+        }
+        if (panelRef.current.instanceColor) {
+          panelRef.current.instanceColor.needsUpdate = true;
+        }
+      }
     }
     if (frameRef.current && frameGeo && pattern.getFrameTransform) {
       const getFrame = pattern.getFrameTransform;
@@ -144,7 +156,7 @@ function StaticInstances({
         getFrame(i, staticParams)
       );
     }
-  }, [count, pattern, staticParams, dummy, panelGeo, frameGeo]);
+  }, [count, pattern, staticParams, dummy, color, panelGeo, frameGeo]);
 
   useEffect(
     () => () => {
@@ -201,24 +213,29 @@ function Scene({
   pattern: Static3DPatternModule;
   staticParams: PatternParams;
 }) {
+  const keyLight = pattern.getLightPosition
+    ? pattern.getLightPosition(staticParams)
+    : ([7, 10, 8] as [number, number, number]);
   return (
     <>
       <ambientLight intensity={0.42} />
       <hemisphereLight args={["#f2f0ea", "#3a3a3a", 0.45]} />
-      <directionalLight
-        castShadow
-        position={[7, 10, 8]}
-        intensity={1.15}
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
-        shadow-camera-near={0.5}
-        shadow-camera-far={60}
-        shadow-camera-left={-20}
-        shadow-camera-right={20}
-        shadow-camera-top={20}
-        shadow-camera-bottom={-20}
-        shadow-bias={-0.0002}
-      />
+      {keyLight && (
+        <directionalLight
+          castShadow
+          position={keyLight}
+          intensity={1.15}
+          shadow-mapSize-width={2048}
+          shadow-mapSize-height={2048}
+          shadow-camera-near={0.5}
+          shadow-camera-far={60}
+          shadow-camera-left={-20}
+          shadow-camera-right={20}
+          shadow-camera-top={20}
+          shadow-camera-bottom={-20}
+          shadow-bias={-0.0002}
+        />
+      )}
       <directionalLight position={[-6, 4, -5]} intensity={0.35} />
       <StaticInstances pattern={pattern} staticParams={staticParams} />
       <OrbitControls
@@ -260,7 +277,11 @@ export default function Pattern3DCanvas({
       <Canvas
         shadows
         camera={{
-          position: [cameraZ * 0.45, cameraZ * 0.28, cameraZ],
+          position: pattern.getCameraPosition?.(staticParams) ?? [
+            cameraZ * 0.45,
+            cameraZ * 0.28,
+            cameraZ,
+          ],
           fov: 42,
         }}
         gl={{ antialias: true, alpha: false }}

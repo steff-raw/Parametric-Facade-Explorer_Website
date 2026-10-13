@@ -69,6 +69,17 @@ export interface Static3DPatternModule {
     width: number;
     height: number;
   };
+  /** Optional per-instance colour (CSS colour). When omitted, no instance colours are set. */
+  getInstanceColor?: (index: number, staticParams: PatternParams) => string;
+  /** Optional initial camera position. When omitted, the default 3/4 oblique view is used. */
+  getCameraPosition?: (staticParams: PatternParams) => [number, number, number];
+  /**
+   * Optional key-light position. When omitted, the default light is used.
+   * Returning null turns the key light and its shadows off.
+   */
+  getLightPosition?: (
+    staticParams: PatternParams
+  ) => [number, number, number] | null;
   generatePreviewSvg: (staticParams?: PatternParams) => string;
 }
 
