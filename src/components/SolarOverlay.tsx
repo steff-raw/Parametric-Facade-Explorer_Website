@@ -50,14 +50,17 @@ function sunLocal(p: PatternParams, hour: number) {
   return toFacade(sun.vec, p.orientation);
 }
 
-function Chip({ label, bare, skin }: { label: string; bare: string; skin: string }) {
+function Chip({ label, short, bare, skin }: { label: string; short: string; bare: string; skin: string }) {
   return (
-    <div className="min-w-0 flex-1 basis-[30%] rounded-[10px] border border-line px-3 py-2 sm:px-4">
-      <div className="text-[10px] leading-tight text-muted sm:text-xs">{label}</div>
-      <div className="mt-1 flex items-baseline gap-1.5 tabular-nums sm:gap-2">
+    <div className="min-w-0 flex-1 basis-[30%] rounded-[10px] border border-line px-2.5 py-2 sm:px-4">
+      <div className="whitespace-nowrap text-[10px] text-muted sm:text-xs">
+        <span className="sm:hidden">{short}</span>
+        <span className="hidden sm:inline">{label}</span>
+      </div>
+      <div className="mt-1 flex items-baseline gap-1 tabular-nums sm:gap-2">
         <span className="text-xs sm:text-sm" style={{ color: HEAT }}>{bare}</span>
         <span className="text-xs text-muted">→</span>
-        <span className="text-base font-bold text-ink sm:text-lg">{skin}</span>
+        <span className="text-sm font-bold text-ink sm:text-lg">{skin}</span>
       </div>
     </div>
   );
@@ -82,34 +85,27 @@ function KeyIcon({ kind }: { kind: "blade" | "fin" | "hood" | "capped" }) {
 }
 
 function PlanInset({ orientation }: { orientation: number }) {
-  const s = 4; // px per m
+  const s = 5; // px per m
   const w = DEFAULT_CONTEXT.cols * 1.5;
   const blockW = w * DEFAULT_CONTEXT.blockWidthShare;
-  const ox = 10, oy = 14;
+  const ox = 6, oy = 22;
+  const by = oy + DEFAULT_CONTEXT.blockDistance * s;
   const [nx, , nz] = toFacade([0, 1, 0], orientation);
-  const ax = 78, ay = 34;
+  const ax = 100, ay = 46;
   return (
-    <svg viewBox="0 0 96 80" className="h-20 w-24" aria-label="Plan: facade, opposite block, north">
-      <line x1={ox} y1={oy} x2={ox + w * s} y2={oy} stroke="#cccccc" strokeWidth="2" />
-      <text x={ox} y={oy - 4} fontSize="7" fill={GREY}>facade</text>
-      <rect
-        x={ox}
-        y={oy + DEFAULT_CONTEXT.blockDistance * s}
-        width={blockW * s}
-        height={14}
-        fill="none"
-        stroke={GREY}
-        strokeDasharray="2 2"
-      />
-      <text x={ox + 2} y={oy + DEFAULT_CONTEXT.blockDistance * s + 10} fontSize="7" fill={GREY}>block</text>
+    <svg viewBox="0 0 120 96" className="h-24 w-[120px]" aria-label="Plan: facade, opposite block, north">
+      <line x1={ox} y1={oy} x2={ox + w * s} y2={oy} stroke="#cccccc" strokeWidth="1.5" />
+      <text x={ox} y={oy - 6} fontSize="10" fill={GREY}>facade</text>
+      <rect x={ox} y={by} width={blockW * s} height={14} fill="none" stroke={GREY} strokeDasharray="2 2" />
+      <text x={ox + 3} y={by + 11} fontSize="10" fill={GREY}>block</text>
       <line x1={ax} y1={ay} x2={ax + nx * 12} y2={ay + nz * 12} stroke="#cccccc" strokeWidth="1.2" />
-      <circle cx={ax + nx * 12} cy={ay + nz * 12} r="1.6" fill="#cccccc" />
-      <text x={ax + nx * 20} y={ay + nz * 20 + 3} fontSize="8" fill="#cccccc" textAnchor="middle">N</text>
+      <circle cx={ax + nx * 12} cy={ay + nz * 12} r="1.8" fill="#cccccc" />
+      <text x={ax + nx * 22} y={ay + nz * 22 + 4} fontSize="10" fill="#cccccc" textAnchor="middle">N</text>
     </svg>
   );
 }
 
-export default function SolarOverlay({ params }: { params: PatternParams }) {
+export default function SolarOverlay({ params, hidden }: { params: PatternParams; hidden?: boolean }) {
   const [ref, { width, height }] = useSize<HTMLDivElement>();
   const res = getSolve(params);
   const k = res.kpi;
@@ -159,7 +155,10 @@ export default function SolarOverlay({ params }: { params: PatternParams }) {
   const labels = res.labels;
 
   return (
-    <div ref={ref} className="pointer-events-none absolute inset-0 z-10">
+    <div
+      ref={ref}
+      className={`pointer-events-none absolute inset-0 z-10 ${hidden ? "invisible sm:visible" : ""}`}
+    >
       {ready && (
         <>
           <svg className="absolute inset-0 h-full w-full" aria-hidden>
@@ -194,13 +193,13 @@ export default function SolarOverlay({ params }: { params: PatternParams }) {
           </div>
 
           {[
-            { x: bmx, y: bb, title: "Bare glass", sub: "Exposure tint" },
-            { x: smx, y: sb, title: "Solved skin", sub: "Element + depth chosen per cell" },
+            { x: bmx, title: "Bare glass", sub: "Exposure tint" },
+            { x: smx, title: "Solved skin", sub: "Element + depth chosen per cell" },
           ].map((l) => (
             <div
               key={l.title}
               className="absolute -translate-x-1/2 text-center"
-              style={{ left: l.x, top: l.y + 8 }}
+              style={{ left: l.x, top: Math.max(bb, sb) + 8 }}
             >
               <div className="text-xs text-ink sm:text-sm">{l.title}</div>
               <div className="hidden text-[11px] text-muted sm:block">{l.sub}</div>
@@ -209,17 +208,17 @@ export default function SolarOverlay({ params }: { params: PatternParams }) {
 
           <div
             className="absolute hidden flex-col gap-3 text-[11px] sm:flex"
-            style={{ left: sr + 16, top: st + 50 }}
+            style={{ left: sr + 8, top: st + 104 }}
           >
             {[
               { kind: "blade" as const, t: "Blade", s: "high sun · top" },
               { kind: "fin" as const, t: "Fin", s: "low side sun" },
               { kind: "hood" as const, t: "Hood", s: "mixed" },
-              { kind: "capped" as const, t: "Grey", s: "capped (Target not met)" },
+              { kind: "capped" as const, t: "Grey", s: "capped · Target not met" },
             ].map((e) => (
-              <div key={e.kind} className="flex items-center gap-2">
+              <div key={e.kind} className="flex items-center gap-1.5">
                 <KeyIcon kind={e.kind} />
-                <div>
+                <div className="max-w-[76px]">
                   <div className="text-ink">{e.t}</div>
                   <div className="text-muted">{e.s}</div>
                 </div>
@@ -227,7 +226,7 @@ export default function SolarOverlay({ params }: { params: PatternParams }) {
             ))}
           </div>
 
-          <div className="absolute hidden sm:block" style={{ left: sr + 12, top: st - 50 }}>
+          <div className="absolute hidden sm:block" style={{ left: sr + 4, top: st }}>
             <PlanInset orientation={params.orientation} />
           </div>
         </>
@@ -240,36 +239,46 @@ export default function SolarOverlay({ params }: { params: PatternParams }) {
         <div className="flex max-w-3xl flex-wrap gap-2 sm:gap-3">
           <Chip
             label={`${labels.cooling === "Summer" ? "Summer" : "Hot season"} gain kWh/m² yr`}
+            short={`${labels.cooling === "Summer" ? "Summer" : "Hot season"} kWh/m²`}
             bare={k.bareSummer.toFixed(0)}
             skin={k.skinSummer.toFixed(0)}
           />
-          <Chip label={`${labels.winterKept} %`} bare="100" skin={k.winterKept.toFixed(0)} />
-          <Chip label="Glare h/yr" bare={k.bareGlare.toFixed(0)} skin={k.skinGlare.toFixed(0)} />
+          <Chip
+            label={`${labels.winterKept} %`}
+            short={labels.cooling === "Summer" ? "Winter kept %" : "Cool season kept %"}
+            bare="100" skin={k.winterKept.toFixed(0)} />
+          <Chip label="Glare h/yr" short="Glare h/yr" bare={k.bareGlare.toFixed(0)} skin={k.skinGlare.toFixed(0)} />
         </div>
       </div>
     </div>
   );
 }
 
-/** Footnote under the canvas: fixed inputs, model limits, view-out. */
+/** Footnote under the canvas: one visible line; fixed inputs and limits in a closed <details>. */
 export function SolarFootnote({ params }: { params: PatternParams }) {
   const res = getSolve(params);
+  const inputs = FOOTNOTES.filter((f) => !f.includes("dome resolution"));
   return (
-    <div className="mx-auto max-w-7xl px-5 pt-4 text-xs leading-relaxed text-muted md:px-8">
+    <div className="max-w-3xl px-5 pt-4 text-[11px] leading-relaxed text-muted md:px-8">
       <p>
-        * Concept-stage estimate, not compliance. Synthetic clear sky every day, solar time,
-        g-value 0.6, occupied 09:00–17:00, grid 8 x 8 cells of 1.5 m.
+        * Synthetic clear sky, solar time, g-value 0.6, occupied 09:00–17:00, 8 × 8 cells of 1.5 m.
+        {" "}{VIEW_OUT_LABEL.replace(" (cosine-weighted)", "")} 100% → {res.kpi.viewOut.toFixed(0)}%.
         {res.labels.footnote && ` ${res.labels.cooling} / ${res.labels.heating}: ${res.labels.footnote}.`}
       </p>
-      <p>Fixed inputs: {FOOTNOTES.join(" ")}</p>
-      <p>
-        Single-column steps (the col-2 stripe in the bare array, a lone blade among hoods) are
-        12° dome resolution, not design. {VIEW_OUT_LABEL}: 100% → {res.kpi.viewOut.toFixed(0)}%.
-      </p>
-      <p>
-        Not modelled: ground reflection, inter-reflection, equation of time, real weather,
-        thermal mass, frame, self-shading between neighbouring cells&apos; elements.
-      </p>
+      <details className="mt-1">
+        <summary className="cursor-pointer underline underline-offset-4 transition-colors hover:text-accent">
+          Assumptions and limits
+        </summary>
+        <p className="mt-2">Fixed inputs: {inputs.join(" ")} View-out is cosine-weighted.</p>
+        <p>
+          Dome resolution: single-column steps (the col-2 stripe in the bare array, a lone blade
+          among hoods) are 12° dome resolution, not design.
+        </p>
+        <p>
+          Not modelled: ground reflection, inter-reflection, equation of time, real weather,
+          thermal mass, frame, self-shading between neighbouring cells&apos; elements.
+        </p>
+      </details>
     </div>
   );
 }

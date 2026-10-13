@@ -153,7 +153,7 @@ const BLUE: RGB = [0x3a, 0x5a, 0x8c]; // thumbnail glass at or below the Target
 const SKIN_GLASS: RGB = [0xa0, 0xc4, 0xf0]; // 3D skin glass at or below the Target (lit at grazing sun, so brighter)
 const WARM: RGB = [0xc4, 0x7a, 0x48]; // bare maximum
 const DIM_WARM: RGB = [0x8a, 0x5a, 0x40]; // bare minimum
-const ELEMENT = "#c8c8c8";
+const ELEMENT = "#e6e6e6";
 const CAPPED = "#8f8f8f";
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
@@ -177,8 +177,11 @@ export function getInstanceColor(index: number, staticParams: PatternParams): st
   const s = solved(p);
   const cell = s.result.cells[Math.floor(index / PARTS)];
   const part = index % PARTS;
-  if (part === 0) return css(bareTint(cell.bareCooling, s));
-  if (part === 1) return css(skinTint(cell.cooling, p.target, s));
+  // Sun below the horizon or behind the facade: no key light, so the glass recedes (x 0.75) and elements read.
+  const k = getLightPosition(p) ? 1 : 0.75;
+  const dim = (c: RGB): RGB => c.map((v) => Math.round(v * k)) as RGB;
+  if (part === 0) return css(dim(bareTint(cell.bareCooling, s)));
+  if (part === 1) return css(dim(skinTint(cell.cooling, p.target, s)));
   return cell.capped ? CAPPED : ELEMENT;
 }
 

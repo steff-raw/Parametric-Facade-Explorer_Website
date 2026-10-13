@@ -196,14 +196,14 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
           <DebugErrorBoundary label={pattern.meta.slug}>
             {viewer}
           </DebugErrorBoundary>
-          {isSolar && <SolarOverlay params={staticParams} />}
+          {isSolar && <SolarOverlay params={staticParams} hidden={controlsOpen} />}
         </div>
 
         {isSolar && (
           <button
             type="button"
             onClick={() => setControlsOpen((o) => !o)}
-            className="absolute inset-x-4 bottom-4 z-30 rounded-full border border-line py-2 text-sm text-ink sm:hidden"
+            className="absolute inset-x-4 bottom-4 z-30 rounded-full border border-line bg-canvas py-2 text-sm text-ink sm:hidden"
             aria-expanded={controlsOpen}
           >
             {controlsOpen ? "Hide controls ▴" : "Show controls ▾"}
@@ -283,7 +283,13 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
           aria-label="Pattern controls"
         >
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-l from-[#0d0d0d]/95 via-[#0d0d0d]/75 to-transparent" />
-          <div className="relative flex h-full flex-col overflow-y-auto px-5 py-6 pt-24 md:px-6">
+          <div
+            className={
+              isSolar
+                ? "relative flex h-full flex-col overflow-y-auto px-5 py-6 pb-20 pt-24 sm:pb-6 md:px-6"
+                : "relative flex h-full flex-col overflow-y-auto px-5 py-6 pt-24 md:px-6"
+            }
+          >
             <div className="flex flex-col gap-6">
               {pattern.meta.staticParams
                 .filter((def) => def.key !== "holeShape")
