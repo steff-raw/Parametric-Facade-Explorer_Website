@@ -95,8 +95,15 @@ export class DebugErrorBoundary extends Component<
 
     if (this.state.error) {
       return (
-        <div className="flex h-full items-center justify-center bg-canvas text-sm text-muted">
-          Something went wrong.
+        <div className="flex h-full flex-col items-center justify-center gap-3 bg-canvas text-sm text-muted">
+          <p>Something went wrong.</p>
+          <button
+            type="button"
+            onClick={() => this.setState({ error: null })}
+            className="text-ink underline underline-offset-4 transition-colors hover:text-accent"
+          >
+            Try again
+          </button>
         </div>
       );
     }

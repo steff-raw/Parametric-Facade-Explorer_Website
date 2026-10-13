@@ -6,11 +6,11 @@ export default function Header() {
       <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5 md:px-10">
         <Link
           href="/"
-          className="text-sm font-semibold tracking-tight text-ink hover:text-accent"
+          className="whitespace-nowrap text-sm font-semibold tracking-tight text-ink hover:text-accent"
         >
           Parametric Facade Explorer
         </Link>
-        <nav className="flex items-center gap-6">
+        <nav className="flex items-center gap-3 sm:gap-6">
           <Link
             href="/studio"
             className="text-sm text-muted transition-colors hover:text-accent"
