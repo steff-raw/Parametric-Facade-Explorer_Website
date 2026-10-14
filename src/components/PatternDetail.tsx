@@ -210,7 +210,7 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
           <button
             type="button"
             onClick={() => setControlsOpen((o) => !o)}
-            className={`${isYield ? "fixed z-50" : "absolute z-30"} inset-x-4 bottom-4 rounded-full border border-line bg-canvas py-2 text-sm text-ink sm:hidden`}
+            className={`${isYield && controlsOpen ? "fixed top-4 z-50" : "absolute bottom-4 z-30"} inset-x-4 rounded-full border border-line bg-canvas py-2 text-sm text-ink sm:hidden`}
             aria-expanded={controlsOpen}
           >
             {controlsOpen ? "Hide controls ▴" : "Show controls ▾"}
