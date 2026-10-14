@@ -18,6 +18,7 @@ import PatternCanvas from "./PatternCanvas";
 import PatternCard from "./PatternCard";
 import MotifPicker from "./MotifPicker";
 import SolarOverlay, { SolarFootnote } from "./SolarOverlay";
+import YieldMap from "./YieldMap";
 import { DebugErrorBoundary } from "./DebugReporter";
 import { addVariation } from "@/lib/storage";
 import { downloadPng, downloadSvg } from "@/lib/export";
@@ -60,6 +61,7 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
   const [shareFlash, setShareFlash] = useState(false);
   const [playing, setPlaying] = useState(true);
   const isSolar = slug === "solar-budget-skin";
+  const isYield = slug === "facade-yield-map";
   const [controlsOpen, setControlsOpen] = useState(false); // phone only, solar slug
 
   const handleStats = useCallback((s: PatternStats) => {
@@ -174,6 +176,8 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
       staticParams={staticParams}
       onStats={handleStats}
     />
+  ) : isYield ? (
+    <YieldMap params={staticParams} />
   ) : (
     <PatternCanvas
       pattern={pattern}
@@ -188,7 +192,7 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
       <section className="relative h-[80vh] min-h-[480px] w-full overflow-hidden bg-canvas">
         <div
           className={
-            isSolar
+            isSolar || isYield
               ? "absolute inset-y-0 left-0 right-0 sm:right-[min(340px,38vw)]"
               : "absolute inset-0"
           }
