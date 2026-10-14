@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
-import { Canvas } from "@react-three/fiber";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import {
@@ -116,6 +116,7 @@ function StaticInstances({
   const panelRef = useRef<THREE.InstancedMesh>(null);
   const frameRef = useRef<THREE.InstancedMesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
+  const color = useMemo(() => new THREE.Color(), []);
 
   const panelGeo = useMemo(
     () => buildPanelGeometry(size, offset),
@@ -137,6 +138,17 @@ function StaticInstances({
       writeMatrices(panelRef.current, count, dummy, (i) =>
         pattern.getElementTransform(i, staticParams)
       );
+      if (pattern.getInstanceColor) {
+        for (let i = 0; i < count; i++) {
+          panelRef.current.setColorAt(
+            i,
+            color.set(pattern.getInstanceColor(i, staticParams))
+          );
+        }
+        if (panelRef.current.instanceColor) {
+          panelRef.current.instanceColor.needsUpdate = true;
+        }
+      }
     }
     if (frameRef.current && frameGeo && pattern.getFrameTransform) {
       const getFrame = pattern.getFrameTransform;
@@ -144,7 +156,7 @@ function StaticInstances({
         getFrame(i, staticParams)
       );
     }
-  }, [count, pattern, staticParams, dummy, panelGeo, frameGeo]);
+  }, [count, pattern, staticParams, dummy, color, panelGeo, frameGeo]);
 
   useEffect(
     () => () => {
@@ -194,6 +206,16 @@ function StaticInstances({
   );
 }
 
+/** Width fit: re-reads the module's fov with the canvas aspect (only for modules with getFov). */
+function FitFov({ fov }: { fov: (aspect: number) => number }) {
+  const { camera, size } = useThree();
+  useEffect(() => {
+    (camera as THREE.PerspectiveCamera).fov = fov(size.width / size.height);
+    camera.updateProjectionMatrix();
+  }, [camera, size, fov]);
+  return null;
+}
+
 function Scene({
   pattern,
   staticParams,
@@ -201,26 +223,38 @@ function Scene({
   pattern: Static3DPatternModule;
   staticParams: PatternParams;
 }) {
+  const fitFov = useCallback(
+    (aspect: number) => pattern.getFov?.(staticParams, aspect) ?? 42,
+    [pattern, staticParams]
+  );
+  const keyLight = pattern.getLightPosition
+    ? pattern.getLightPosition(staticParams)
+    : ([7, 10, 8] as [number, number, number]);
   return (
     <>
       <ambientLight intensity={0.42} />
       <hemisphereLight args={["#f2f0ea", "#3a3a3a", 0.45]} />
-      <directionalLight
-        castShadow
-        position={[7, 10, 8]}
-        intensity={1.15}
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
-        shadow-camera-near={0.5}
-        shadow-camera-far={60}
-        shadow-camera-left={-20}
-        shadow-camera-right={20}
-        shadow-camera-top={20}
-        shadow-camera-bottom={-20}
-        shadow-bias={-0.0002}
-      />
+      {keyLight && (
+        <directionalLight
+          castShadow
+          position={keyLight}
+          intensity={1.15}
+          shadow-mapSize-width={2048}
+          shadow-mapSize-height={2048}
+          shadow-camera-near={0.5}
+          shadow-camera-far={60}
+          shadow-camera-left={-20}
+          shadow-camera-right={20}
+          shadow-camera-top={20}
+          shadow-camera-bottom={-20}
+          shadow-bias={-0.0002}
+        />
+      )}
       <directionalLight position={[-6, 4, -5]} intensity={0.35} />
       <StaticInstances pattern={pattern} staticParams={staticParams} />
+      {pattern.getFov && (
+        <FitFov fov={fitFov} />
+      )}
       <OrbitControls
         makeDefault
         enablePan
@@ -260,8 +294,12 @@ export default function Pattern3DCanvas({
       <Canvas
         shadows
         camera={{
-          position: [cameraZ * 0.45, cameraZ * 0.28, cameraZ],
-          fov: 42,
+          position: pattern.getCameraPosition?.(staticParams) ?? [
+            cameraZ * 0.45,
+            cameraZ * 0.28,
+            cameraZ,
+          ],
+          fov: pattern.getFov?.(staticParams) ?? 42,
         }}
         gl={{ antialias: true, alpha: false }}
         onCreated={({ gl }) => {

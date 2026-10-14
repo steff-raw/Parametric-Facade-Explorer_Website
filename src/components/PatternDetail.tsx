@@ -17,6 +17,7 @@ import TagPill from "./TagPill";
 import PatternCanvas from "./PatternCanvas";
 import PatternCard from "./PatternCard";
 import MotifPicker from "./MotifPicker";
+import SolarOverlay, { SolarFootnote } from "./SolarOverlay";
 import { DebugErrorBoundary } from "./DebugReporter";
 import { addVariation } from "@/lib/storage";
 import { downloadPng, downloadSvg } from "@/lib/export";
@@ -58,6 +59,8 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
   const [savedFlash, setSavedFlash] = useState(false);
   const [shareFlash, setShareFlash] = useState(false);
   const [playing, setPlaying] = useState(true);
+  const isSolar = slug === "solar-budget-skin";
+  const [controlsOpen, setControlsOpen] = useState(false); // phone only, solar slug
 
   const handleStats = useCallback((s: PatternStats) => {
     setStats(s);
@@ -181,14 +184,38 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
 
   return (
     <div className="w-full">
-      {/* Immersive viewer — ~80% viewport; controls float over a gradient from sm up.
-          Below sm the controls stack under the viewer so they never cover it. */}
-      <section className="relative w-full bg-canvas sm:h-[80vh] sm:min-h-[480px] sm:overflow-hidden">
-        <div className="relative h-[70vh] min-h-[360px] w-full sm:absolute sm:inset-0 sm:h-auto sm:min-h-0">
+      {/* Immersive viewer — ~80% viewport. Solar keeps its own phone toggle over the viewer;
+          other patterns stack their controls under the viewer below sm so they never cover it. */}
+      <section
+        className={
+          isSolar
+            ? "relative h-[80vh] min-h-[480px] w-full overflow-hidden bg-canvas"
+            : "relative w-full bg-canvas sm:h-[80vh] sm:min-h-[480px] sm:overflow-hidden"
+        }
+      >
+        <div
+          className={
+            isSolar
+              ? "absolute inset-y-0 left-0 right-0 sm:right-[min(340px,38vw)]"
+              : "relative h-[70vh] min-h-[360px] w-full sm:absolute sm:inset-0 sm:h-auto sm:min-h-0"
+          }
+        >
           <DebugErrorBoundary label={pattern.meta.slug}>
             {viewer}
           </DebugErrorBoundary>
+          {isSolar && <SolarOverlay params={staticParams} hidden={controlsOpen} />}
         </div>
+
+        {isSolar && (
+          <button
+            type="button"
+            onClick={() => setControlsOpen((o) => !o)}
+            className="absolute inset-x-4 bottom-4 z-30 rounded-full border border-line bg-canvas py-2 text-sm text-ink sm:hidden"
+            aria-expanded={controlsOpen}
+          >
+            {controlsOpen ? "Hide controls ▴" : "Show controls ▾"}
+          </button>
+        )}
 
         {/* Top chrome */}
         <div className="pointer-events-none absolute inset-x-0 top-0 z-20 bg-gradient-to-b from-[#0d0d0d]/90 via-[#0d0d0d]/45 to-transparent px-5 pb-16 pt-5 md:px-8">
@@ -259,11 +286,27 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
 
         {/* Floating controls panel */}
         <aside
-          className="relative z-20 flex w-full flex-col border-t border-line/60 sm:absolute sm:bottom-0 sm:right-0 sm:top-0 sm:w-[min(340px,38vw)] sm:max-w-md sm:overflow-hidden sm:border-t-0"
+          className={
+            isSolar
+              ? `absolute bottom-0 right-0 top-0 z-20 ${controlsOpen ? "flex" : "hidden sm:flex"} w-full max-w-md flex-col overflow-hidden sm:w-[min(340px,38vw)]`
+              : "relative z-20 flex w-full flex-col border-t border-line/60 sm:absolute sm:bottom-0 sm:right-0 sm:top-0 sm:w-[min(340px,38vw)] sm:max-w-md sm:overflow-hidden sm:border-t-0"
+          }
           aria-label="Pattern controls"
         >
-          <div className="pointer-events-none absolute inset-0 hidden bg-gradient-to-l from-[#0d0d0d]/95 via-[#0d0d0d]/75 to-transparent sm:block" />
-          <div className="relative flex flex-col px-5 py-6 sm:h-full sm:overflow-y-auto sm:pt-24 md:px-6">
+          <div
+            className={
+              isSolar
+                ? "pointer-events-none absolute inset-0 bg-gradient-to-l from-[#0d0d0d]/95 via-[#0d0d0d]/75 to-transparent"
+                : "pointer-events-none absolute inset-0 hidden bg-gradient-to-l from-[#0d0d0d]/95 via-[#0d0d0d]/75 to-transparent sm:block"
+            }
+          />
+          <div
+            className={
+              isSolar
+                ? "relative flex h-full flex-col overflow-y-auto px-5 py-6 pb-20 pt-24 sm:pb-6 md:px-6"
+                : "relative flex flex-col px-5 py-6 sm:h-full sm:overflow-y-auto sm:pt-24 md:px-6"
+            }
+          >
             <div className="flex flex-col gap-6">
               {pattern.meta.staticParams
                 .filter((def) => def.key !== "holeShape")
@@ -378,6 +421,7 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
           </div>
         </aside>
       </section>
+      {isSolar && <SolarFootnote params={staticParams} />}
 
       {/* Meta below the immersive viewer */}
       <div className="mx-auto max-w-7xl px-6 py-12 md:px-10">
