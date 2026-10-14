@@ -18,6 +18,7 @@ import PatternCanvas from "./PatternCanvas";
 import PatternCard from "./PatternCard";
 import MotifPicker from "./MotifPicker";
 import SolarOverlay, { SolarFootnote } from "./SolarOverlay";
+import YieldMap from "./YieldMap";
 import { DebugErrorBoundary } from "./DebugReporter";
 import { addVariation } from "@/lib/storage";
 import { downloadPng, downloadSvg } from "@/lib/export";
@@ -60,7 +61,9 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
   const [shareFlash, setShareFlash] = useState(false);
   const [playing, setPlaying] = useState(true);
   const isSolar = slug === "solar-budget-skin";
-  const [controlsOpen, setControlsOpen] = useState(false); // phone only, solar slug
+  const isYield = slug === "facade-yield-map";
+  const [controlsOpen, setControlsOpen] = useState(false); // phone only, solar and yield slugs
+  const phoneToggle = isSolar || isYield;
 
   const handleStats = useCallback((s: PatternStats) => {
     setStats(s);
@@ -174,6 +177,8 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
       staticParams={staticParams}
       onStats={handleStats}
     />
+  ) : isYield ? (
+    <YieldMap params={staticParams} />
   ) : (
     <PatternCanvas
       pattern={pattern}
@@ -185,17 +190,21 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
   return (
     <div className="w-full">
       {/* Immersive viewer — ~80% viewport. Solar keeps its own phone toggle over the viewer;
-          other patterns stack their controls under the viewer below sm so they never cover it. */}
+          the yield map grows with its content; other patterns stack their controls under the viewer below sm. */}
       <section
         className={
           isSolar
             ? "relative h-[80vh] min-h-[480px] w-full overflow-hidden bg-canvas"
-            : "relative w-full bg-canvas sm:h-[80vh] sm:min-h-[480px] sm:overflow-hidden"
+            : isYield
+              ? "relative min-h-[80vh] w-full overflow-hidden bg-canvas"
+              : "relative w-full bg-canvas sm:h-[80vh] sm:min-h-[480px] sm:overflow-hidden"
         }
       >
         <div
           className={
-            isSolar
+            isYield
+              ? "relative sm:mr-[min(340px,38vw)]"
+              : isSolar
               ? "absolute inset-y-0 left-0 right-0 sm:right-[min(340px,38vw)]"
               : "relative h-[70vh] min-h-[360px] w-full sm:absolute sm:inset-0 sm:h-auto sm:min-h-0"
           }
@@ -206,11 +215,11 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
           {isSolar && <SolarOverlay params={staticParams} hidden={controlsOpen} />}
         </div>
 
-        {isSolar && (
+        {phoneToggle && (
           <button
             type="button"
             onClick={() => setControlsOpen((o) => !o)}
-            className="absolute inset-x-4 bottom-4 z-30 rounded-full border border-line bg-canvas py-2 text-sm text-ink sm:hidden"
+            className={`${isYield && controlsOpen ? "fixed top-4 z-50" : "absolute bottom-4 z-30"} inset-x-4 rounded-full border border-line bg-canvas py-2 text-sm text-ink sm:hidden`}
             aria-expanded={controlsOpen}
           >
             {controlsOpen ? "Hide controls ▴" : "Show controls ▾"}
@@ -289,7 +298,9 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
           className={
             isSolar
               ? `absolute bottom-0 right-0 top-0 z-20 ${controlsOpen ? "flex" : "hidden sm:flex"} w-full max-w-md flex-col overflow-hidden sm:w-[min(340px,38vw)]`
-              : "relative z-20 flex w-full flex-col border-t border-line/60 sm:absolute sm:bottom-0 sm:right-0 sm:top-0 sm:w-[min(340px,38vw)] sm:max-w-md sm:overflow-hidden sm:border-t-0"
+              : isYield
+                ? `absolute bottom-0 right-0 top-0 z-20 ${controlsOpen ? "flex" : "hidden sm:flex"} max-sm:fixed max-sm:inset-0 max-sm:z-40 max-sm:max-w-none max-sm:bg-canvas w-full max-w-md flex-col overflow-hidden sm:w-[min(340px,38vw)]`
+                : "relative z-20 flex w-full flex-col border-t border-line/60 sm:absolute sm:bottom-0 sm:right-0 sm:top-0 sm:w-[min(340px,38vw)] sm:max-w-md sm:overflow-hidden sm:border-t-0"
           }
           aria-label="Pattern controls"
         >
@@ -302,7 +313,7 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
           />
           <div
             className={
-              isSolar
+              phoneToggle
                 ? "relative flex h-full flex-col overflow-y-auto px-5 py-6 pb-20 pt-24 sm:pb-6 md:px-6"
                 : "relative flex flex-col px-5 py-6 sm:h-full sm:overflow-y-auto sm:pt-24 md:px-6"
             }

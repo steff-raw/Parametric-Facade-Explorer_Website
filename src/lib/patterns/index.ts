@@ -1,6 +1,7 @@
 import * as deformedGrid from "./deformed-grid";
 import * as radialLouvre from "./radial-louvre";
 import * as perforatedScreen from "./perforated-screen";
+import * as yieldMap from "./yield-map";
 import {
   kineticPatterns,
   static3dPatterns,
@@ -28,6 +29,7 @@ const staticModules: PatternModule[] = [
     generate: perforatedScreen.generate,
     defaults: perforatedScreen.defaults,
   },
+  { meta: yieldMap.meta, generate: yieldMap.generate, defaults: yieldMap.defaults },
 ];
 
 const kineticAsModules: PatternModule[] = kineticPatterns.map((k) => ({
