@@ -122,12 +122,6 @@ export function countKinetic(): number {
   return patterns.filter((m) => m.meta.type === "kinetic-3d").length;
 }
 
-export function count3D(): number {
-  return patterns.filter(
-    (m) => m.meta.type === "kinetic-3d" || m.meta.type === "static-3d"
-  ).length;
-}
-
 /** Thumbnail SVG for any pattern type */
 export function getThumbnailSvg(
   pattern: PatternModule,

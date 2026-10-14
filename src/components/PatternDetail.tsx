@@ -184,13 +184,20 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
 
   return (
     <div className="w-full">
-      {/* Immersive viewer — ~80% viewport; controls float over a gradient */}
-      <section className="relative h-[80vh] min-h-[480px] w-full overflow-hidden bg-canvas">
+      {/* Immersive viewer — ~80% viewport. Solar keeps its own phone toggle over the viewer;
+          other patterns stack their controls under the viewer below sm so they never cover it. */}
+      <section
+        className={
+          isSolar
+            ? "relative h-[80vh] min-h-[480px] w-full overflow-hidden bg-canvas"
+            : "relative w-full bg-canvas sm:h-[80vh] sm:min-h-[480px] sm:overflow-hidden"
+        }
+      >
         <div
           className={
             isSolar
               ? "absolute inset-y-0 left-0 right-0 sm:right-[min(340px,38vw)]"
-              : "absolute inset-0"
+              : "relative h-[70vh] min-h-[360px] w-full sm:absolute sm:inset-0 sm:h-auto sm:min-h-0"
           }
         >
           <DebugErrorBoundary label={pattern.meta.slug}>
@@ -279,15 +286,25 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
 
         {/* Floating controls panel */}
         <aside
-          className={`absolute bottom-0 right-0 top-0 z-20 ${isSolar && !controlsOpen ? "hidden sm:flex" : "flex"} w-full max-w-md flex-col overflow-hidden sm:w-[min(340px,38vw)]`}
+          className={
+            isSolar
+              ? `absolute bottom-0 right-0 top-0 z-20 ${controlsOpen ? "flex" : "hidden sm:flex"} w-full max-w-md flex-col overflow-hidden sm:w-[min(340px,38vw)]`
+              : "relative z-20 flex w-full flex-col border-t border-line/60 sm:absolute sm:bottom-0 sm:right-0 sm:top-0 sm:w-[min(340px,38vw)] sm:max-w-md sm:overflow-hidden sm:border-t-0"
+          }
           aria-label="Pattern controls"
         >
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-l from-[#0d0d0d]/95 via-[#0d0d0d]/75 to-transparent" />
+          <div
+            className={
+              isSolar
+                ? "pointer-events-none absolute inset-0 bg-gradient-to-l from-[#0d0d0d]/95 via-[#0d0d0d]/75 to-transparent"
+                : "pointer-events-none absolute inset-0 hidden bg-gradient-to-l from-[#0d0d0d]/95 via-[#0d0d0d]/75 to-transparent sm:block"
+            }
+          />
           <div
             className={
               isSolar
                 ? "relative flex h-full flex-col overflow-y-auto px-5 py-6 pb-20 pt-24 sm:pb-6 md:px-6"
-                : "relative flex h-full flex-col overflow-y-auto px-5 py-6 pt-24 md:px-6"
+                : "relative flex flex-col px-5 py-6 sm:h-full sm:overflow-y-auto sm:pt-24 md:px-6"
             }
           >
             <div className="flex flex-col gap-6">
