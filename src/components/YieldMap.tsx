@@ -72,9 +72,10 @@ export default function YieldMap({ params }: { params: PatternParams }) {
   const barH = (Math.min(p.blockHeight, FACADE_M) / FACADE_M) * GRID;
   const blockLabel = p.blockHeight > 0 ? `block ${p.blockHeight} m` : "no block";
   const isCols = stringing === "cols";
-  // Column-bar area reserved in both modes (no page jump on the Stringing toggle); labels on one baseline.
-  const colMax = r1(Math.max(1, Math.min(50, Math.max(...view.cols.strings)) * COL_PX_PER_PCT));
-  const gridH = TOP + GRID + CUT_H + 40 + colMax + 26;
+  // Grid and KPI chips keep the same y in both modes; column bars go below the chips (labels on one baseline).
+  const colMax = r1(Math.max(1, Math.min(50, worst) * COL_PX_PER_PCT));
+  const gridH = TOP + GRID + CUT_H;
+  const colH = 20 + colMax + 26;
   const higher = view.rows.loss === view.cols.loss ? null : view.rows.loss > view.cols.loss ? "rows" : "cols";
   const [srcBefore, srcAfter] = LONDON_FOOTNOTE.split("Camden planning document");
 
@@ -138,22 +139,6 @@ export default function YieldMap({ params }: { params: PatternParams }) {
             {`Cut-off = ${kwh(view.threshold)} kWh/m² yr (${p.cutoff} % of unshaded ${kwh(sol.H0)}) · ${view.onCount} of 64 on`}
           </text>
 
-          {isCols && (
-            <g data-yield-bars="cols">
-              <text x={LEFT} y={TOP + GRID + CUT_H + 26} className={LABEL} fill={MUTED}>String mismatch loss, column strings</text>
-              {bars.map((v, c) => {
-                const x = LEFT + c * (CELL + GAP) + CELL / 2;
-                const y0 = TOP + GRID + CUT_H + 40;
-                const h = r1(Math.max(1, Math.min(50, v) * COL_PX_PER_PCT));
-                return (
-                  <g key={c} data-bar={c}>
-                    <rect x={x - 6} y={y0} width={12} height={h} fill={barColour(v)} />
-                    <text x={x} y={y0 + colMax + 16} textAnchor="middle" className={`${LABEL} tabular-nums`} fill="#e8e8e8">{pct(v)}</text>
-                  </g>
-                );
-              })}
-            </g>
-          )}
         </svg>
 
         {!isCols && (
@@ -181,21 +166,6 @@ export default function YieldMap({ params }: { params: PatternParams }) {
         )}
       </div>
 
-      {!isCols && (
-        <div className="mt-2 sm:hidden" data-yield-bars-phone>
-          <div className="mb-1.5 text-xs text-muted">String mismatch loss, row strings</div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] tabular-nums">
-            {bars.map((v, r) => (
-              <div key={r} className="flex items-center gap-1.5">
-                <span className="w-9 shrink-0 text-muted">Row {r + 1}</span>
-                <span className="h-2 shrink-0" style={{ width: r1(Math.max(1.5, Math.min(50, v) * 1.2)), background: barColour(v) }} />
-                <span className="text-ink">{pct(v)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       <div className="mt-4 grid max-w-[820px] grid-cols-2 gap-2 sm:grid-cols-[1fr_1fr_1.5fr_1fr] sm:gap-3" data-yield-kpis>
         <Chip label={`Layout yield, ${isCols ? "columns" : "rows"}`}>
           <span className="text-lg font-bold text-ink">{kwh(view.kwh)}</span>
@@ -215,6 +185,48 @@ export default function YieldMap({ params }: { params: PatternParams }) {
           <span className="text-xs text-muted">of 64</span>
         </Chip>
       </div>
+
+      {!isCols && (
+        <div className="mt-4 sm:hidden" data-yield-bars-phone>
+          <div className="mb-1.5 text-xs text-muted">String mismatch loss, row strings</div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] tabular-nums">
+            {bars.map((v, r) => (
+              <div key={r} className="flex items-center gap-1.5">
+                <span className="w-9 shrink-0 text-muted">Row {r + 1}</span>
+                <span className="h-2 shrink-0" style={{ width: r1(Math.max(1.5, Math.min(50, v) * 1.2)), background: barColour(v) }} />
+                <span className="text-ink">{pct(v)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {isCols && (
+        <svg
+          viewBox={`0 0 ${GW} ${colH}`}
+          width={GW}
+          height={colH}
+          className="mt-4 block h-auto w-full"
+          style={{ maxWidth: GW }}
+          aria-label="String mismatch loss, column strings"
+          fontFamily="inherit"
+        >
+          <g data-yield-bars="cols">
+            <text x={LEFT} y={12} className={LABEL} fill={MUTED}>String mismatch loss, column strings</text>
+            {bars.map((v, c) => {
+              const x = LEFT + c * (CELL + GAP) + CELL / 2;
+              const y0 = 20;
+              const h = r1(Math.max(1, Math.min(50, v) * COL_PX_PER_PCT));
+              return (
+                <g key={c} data-bar={c}>
+                  <rect x={x - 6} y={y0} width={12} height={h} fill={barColour(v)} />
+                  <text x={x} y={y0 + colMax + 16} textAnchor="middle" className={`${LABEL} tabular-nums`} fill="#e8e8e8">{pct(v)}</text>
+                </g>
+              );
+            })}
+          </g>
+        </svg>
+      )}
 
       <div className="mt-3 max-w-[820px] space-y-1 text-[11px] leading-relaxed text-muted">
         <p>
