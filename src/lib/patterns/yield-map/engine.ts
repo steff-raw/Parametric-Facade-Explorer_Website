@@ -49,8 +49,9 @@ export const YIELD_CONTEXT: Context = { rows: ROWS, cols: COLS, blockHeight: 12,
 export const GRID_HEADER = "Clear-sky kWh/m² yr (upper bound)";
 export const CAPTION = "Concept-stage estimate, not compliance";
 export const STRING_LABEL = "Series string, no bypass diodes or optimisers: upper bound for this model";
+export const LONDON_SOURCE = "https://camdocs.camden.gov.uk/CMWebDrawer/Record/9512536/file/document";
 export const LONDON_FOOTNOTE =
-  "Engine horizontal 1,721 kWh/m² yr (clear sky every day) vs about 975 for London (approximate; PVsyst figure quoted in a Camden planning document, secondary source): about 1.8x on a horizontal surface; the gap is larger on a vertical facade (clear sky has little diffuse light). Real skies also soften shade contrast, so string losses here are on the high side. Use for ranking modules and wiring, not for kWh promises.";
+  "Engine horizontal about 1,720 kWh/m² yr (clear sky every day) vs about 975 for London (approximate, secondary source: PVsyst figure quoted in a Camden planning document): about 1.8x on a horizontal surface; the gap is larger on a vertical facade (clear sky has little diffuse light). Real skies also soften shade contrast, so string losses here are on the high side. Use for ranking modules and wiring, not for kWh promises.";
 
 /** Annual module yield, kWh/yr, from irradiation H in kWh/m² yr. */
 export function moduleYield(h: number): number {

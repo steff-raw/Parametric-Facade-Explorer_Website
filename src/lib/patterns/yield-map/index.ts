@@ -16,7 +16,7 @@ import {
 } from "../shared/types";
 import { SVG_SIZE } from "../shared/math";
 import { compass, formatLatitude } from "../../patterns-3d/solar-budget-skin";
-import { COLS, DEFAULT_PARAMS, ROWS, Solution, layout, solve } from "./engine";
+import { COLS, DEFAULT_PARAMS, ROWS, Solution, Stringing, layout, solve } from "./engine";
 
 export const meta: PatternMeta = {
   slug: "facade-yield-map",
@@ -31,11 +31,15 @@ export const meta: PatternMeta = {
     { key: "orientation", label: "Orientation", min: 0, max: 337.5, step: 22.5, default: DEFAULT_PARAMS.orientation, format: (v) => `${compass(v)} ${v}°` },
     { key: "latitude", label: "Latitude", min: -60, max: 60, step: 0.5, default: DEFAULT_PARAMS.latitude, format: formatLatitude },
     { key: "cutoff", label: "Yield cut-off", min: 0, max: 100, step: 1, default: DEFAULT_PARAMS.cutoff, format: (v) => `${v} % of unshaded` },
+    { key: "stringing", label: "Stringing", min: 0, max: 1, step: 1, default: 0, options: ["Rows", "Columns"] },
     { key: "blockHeight", label: "Block height", min: 0, max: 30, step: 2, default: DEFAULT_PARAMS.blockHeight, format: (v) => `${v} m` },
   ],
 };
 
 export const defaults = defaultsFromMeta(meta);
+
+/** Stringing slider value (0 rows, 1 columns) to the engine's key. */
+export const stringingOf = (v: number): Stringing => (Math.round(v) === 1 ? "cols" : "rows");
 
 const cache = new Map<string, Solution>();
 

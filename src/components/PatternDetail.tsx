@@ -62,7 +62,8 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
   const [playing, setPlaying] = useState(true);
   const isSolar = slug === "solar-budget-skin";
   const isYield = slug === "facade-yield-map";
-  const [controlsOpen, setControlsOpen] = useState(false); // phone only, solar slug
+  const [controlsOpen, setControlsOpen] = useState(false); // phone only, solar and yield slugs
+  const phoneToggle = isSolar || isYield;
 
   const handleStats = useCallback((s: PatternStats) => {
     setStats(s);
@@ -189,10 +190,12 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
   return (
     <div className="w-full">
       {/* Immersive viewer — ~80% viewport; controls float over a gradient */}
-      <section className="relative h-[80vh] min-h-[480px] w-full overflow-hidden bg-canvas">
+      <section className={isYield ? "relative min-h-[80vh] w-full overflow-hidden bg-canvas" : "relative h-[80vh] min-h-[480px] w-full overflow-hidden bg-canvas"}>
         <div
           className={
-            isSolar || isYield
+            isYield
+              ? "relative sm:mr-[min(340px,38vw)]"
+              : isSolar
               ? "absolute inset-y-0 left-0 right-0 sm:right-[min(340px,38vw)]"
               : "absolute inset-0"
           }
@@ -203,11 +206,11 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
           {isSolar && <SolarOverlay params={staticParams} hidden={controlsOpen} />}
         </div>
 
-        {isSolar && (
+        {phoneToggle && (
           <button
             type="button"
             onClick={() => setControlsOpen((o) => !o)}
-            className="absolute inset-x-4 bottom-4 z-30 rounded-full border border-line bg-canvas py-2 text-sm text-ink sm:hidden"
+            className={`${isYield ? "fixed z-50" : "absolute z-30"} inset-x-4 bottom-4 rounded-full border border-line bg-canvas py-2 text-sm text-ink sm:hidden`}
             aria-expanded={controlsOpen}
           >
             {controlsOpen ? "Hide controls ▴" : "Show controls ▾"}
@@ -283,13 +286,13 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
 
         {/* Floating controls panel */}
         <aside
-          className={`absolute bottom-0 right-0 top-0 z-20 ${isSolar && !controlsOpen ? "hidden sm:flex" : "flex"} w-full max-w-md flex-col overflow-hidden sm:w-[min(340px,38vw)]`}
+          className={`absolute bottom-0 right-0 top-0 z-20 ${phoneToggle && !controlsOpen ? "hidden sm:flex" : "flex"} ${isYield ? "max-sm:fixed max-sm:inset-0 max-sm:z-40 max-sm:max-w-none max-sm:bg-canvas" : ""} w-full max-w-md flex-col overflow-hidden sm:w-[min(340px,38vw)]`}
           aria-label="Pattern controls"
         >
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-l from-[#0d0d0d]/95 via-[#0d0d0d]/75 to-transparent" />
           <div
             className={
-              isSolar
+              phoneToggle
                 ? "relative flex h-full flex-col overflow-y-auto px-5 py-6 pb-20 pt-24 sm:pb-6 md:px-6"
                 : "relative flex h-full flex-col overflow-y-auto px-5 py-6 pt-24 md:px-6"
             }
