@@ -16,13 +16,13 @@ import {
 } from "../shared/types";
 import { SVG_SIZE } from "../shared/math";
 import { compass, formatLatitude } from "../../patterns-3d/solar-budget-skin";
-import { COLS, DEFAULT_PARAMS, ROWS, Solution, Stringing, layout, solve } from "./engine";
+import { COLS, DEFAULT_PARAMS, ROWS, Solution, Stringing, onMask, solve } from "./engine";
 
 export const meta: PatternMeta = {
   slug: "facade-yield-map",
   name: "Facade Yield Map",
   description:
-    "Annual clear-sky irradiation on each 1.5 m PV module of a facade shaded by a neighbouring block. Modules under a yield cut-off (a share of an unshaded module) are left plain. Concept-stage estimate, not compliance.",
+    "Annual clear-sky irradiation on each 1.5 m PV module of a facade shaded by a neighbouring block. Modules under a yield cut-off (a share of an unshaded module) are left plain. Not modelled: real weather, ground reflection, temperature, module electrical curves, partial shade inside a module, equation of time; one sample point per module centre (within 2 % of a 2 x 2 sample). Concept-stage estimate, not compliance.",
   tags: ["Performance", "Solar", "PV"],
   type: "static-2d",
   popularity: 70,
@@ -69,25 +69,29 @@ export function grey(t: number): string {
   return `#${v}${v}${v}`;
 }
 
+const r2 = (v: number) => Math.round(v * 100) / 100;
+
 /** Thumbnail and export: grey cells, dashed off cells, no text. */
 export function generate(params: PatternParams): PatternResult {
   const p = { ...defaults, ...params };
   const sol = getSolve(p);
-  const { on } = layout(sol, p.cutoff, "rows");
+  const on = onMask(sol, p.cutoff);
   const t = greyScale(sol, on);
-  const margin = 120, gap = 8;
-  const cell = (SVG_SIZE - 2 * margin - (COLS - 1) * gap) / COLS;
+  // 373 px card: cell 33 px, gap 3 px, grid 285 px centred (800-unit viewBox).
+  const k = SVG_SIZE / 373;
+  const cell = r2(33 * k), gap = r2(3 * k);
+  const margin = r2((SVG_SIZE - COLS * cell - (COLS - 1) * gap) / 2);
   const primitives: SvgPrimitive[] = [];
   const body: string[] = [];
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       const m = r * COLS + c;
-      const x = margin + c * (cell + gap), y = margin + r * (cell + gap);
+      const x = r2(margin + c * (cell + gap)), y = r2(margin + r * (cell + gap));
       primitives.push({ type: "rect", x, y, width: cell, height: cell });
       body.push(
         on[m]
           ? `<rect x="${x}" y="${y}" width="${cell}" height="${cell}" fill="${grey(t[m])}" />`
-          : `<rect x="${x + 1}" y="${y + 1}" width="${cell - 2}" height="${cell - 2}" fill="none" stroke="#969696" stroke-width="2" stroke-dasharray="6 5" />`,
+          : `<rect x="${x + 1}" y="${y + 1}" width="${cell - 2}" height="${cell - 2}" fill="none" stroke="#969696" stroke-width="${r2(k)}" stroke-dasharray="${r2(2 * k)} ${r2(2 * k)}" />`,
       );
     }
   }

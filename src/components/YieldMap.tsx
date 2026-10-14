@@ -58,10 +58,13 @@ export default function YieldMap({ params }: { params: PatternParams }) {
   const p = { ...defaults, ...params };
   const stringing = stringingOf(p.stringing);
   const sol = useMemo(() => getSolve({ orientation: p.orientation, latitude: p.latitude, blockHeight: p.blockHeight }), [p.orientation, p.latitude, p.blockHeight]);
-  const view = useMemo(() => {
-    const L = layout(sol, p.cutoff, stringing);
+  // Both wirings come from one re-derive per cut-off; the Stringing toggle only picks one.
+  const base = useMemo(() => {
+    const L = layout(sol, p.cutoff, "rows");
     return { ...L, t: greyScale(sol, L.on) };
-  }, [sol, p.cutoff, stringing]);
+  }, [sol, p.cutoff]);
+  const chosen = stringing === "cols" ? base.cols : base.rows;
+  const view = { ...base, chosen, kwh: chosen.kwh, vsNaive: base.naiveKwh > 0 ? 100 * (chosen.kwh / base.naiveKwh - 1) : 0 };
 
   const bars = view.chosen.strings;
   const worst = Math.max(...bars);
@@ -69,7 +72,9 @@ export default function YieldMap({ params }: { params: PatternParams }) {
   const barH = (Math.min(p.blockHeight, FACADE_M) / FACADE_M) * GRID;
   const blockLabel = p.blockHeight > 0 ? `block ${p.blockHeight} m` : "no block";
   const isCols = stringing === "cols";
-  const gridH = TOP + GRID + CUT_H + (isCols ? 40 + r1(Math.min(50, worst) * COL_PX_PER_PCT) + 26 : 0);
+  // Column-bar area reserved in both modes (no page jump on the Stringing toggle); labels on one baseline.
+  const colMax = r1(Math.max(1, Math.min(50, Math.max(...view.cols.strings)) * COL_PX_PER_PCT));
+  const gridH = TOP + GRID + CUT_H + 40 + colMax + 26;
   const higher = view.rows.loss === view.cols.loss ? null : view.rows.loss > view.cols.loss ? "rows" : "cols";
   const [srcBefore, srcAfter] = LONDON_FOOTNOTE.split("Camden planning document");
 
@@ -143,7 +148,7 @@ export default function YieldMap({ params }: { params: PatternParams }) {
                 return (
                   <g key={c} data-bar={c}>
                     <rect x={x - 6} y={y0} width={12} height={h} fill={barColour(v)} />
-                    <text x={x} y={y0 + h + 16} textAnchor="middle" className={`${LABEL} tabular-nums`} fill="#e8e8e8">{pct(v)}</text>
+                    <text x={x} y={y0 + colMax + 16} textAnchor="middle" className={`${LABEL} tabular-nums`} fill="#e8e8e8">{pct(v)}</text>
                   </g>
                 );
               })}
@@ -223,10 +228,6 @@ export default function YieldMap({ params }: { params: PatternParams }) {
             Camden planning document
           </a>
           {srcAfter}
-        </p>
-        <p>
-          Not modelled: real weather, ground reflection, temperature, module electrical curves, partial shade inside a module,
-          equation of time. One sample point per module centre (within 2 % of a 2 × 2 sample).
         </p>
         <p className="text-ink">{CAPTION}.</p>
       </div>

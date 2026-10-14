@@ -216,10 +216,16 @@ export interface Layout {
   vsNaive: number; // %
 }
 
+/** Module on if H ≥ cut-off % of H0 (tolerance: unobstructed modules equal H0 to float precision). */
+export function onMask(sol: Solution, cutoff: number): boolean[] {
+  const threshold = (cutoff / 100) * sol.H0;
+  return sol.H.map((h) => h >= threshold * (1 - 1e-9));
+}
+
 /** Cut-off and stringing re-derive from the cached solution. */
 export function layout(sol: Solution, cutoff: number, stringing: Stringing): Layout {
   const threshold = (cutoff / 100) * sol.H0;
-  const on = sol.H.map((h) => h >= threshold * (1 - 1e-9));
+  const on = onMask(sol, cutoff);
   const rows = wire(sol, on, "rows"), cols = wire(sol, on, "cols");
   const chosen = stringing === "rows" ? rows : cols;
   const idealKwh = sol.H.reduce((a, h, m) => a + (on[m] ? moduleYield(h) : 0), 0);
