@@ -19,6 +19,7 @@ import PatternCard from "./PatternCard";
 import MotifPicker from "./MotifPicker";
 import SolarOverlay, { SolarFootnote } from "./SolarOverlay";
 import YieldMap from "./YieldMap";
+import StackCavity from "./StackCavity";
 import { DebugErrorBoundary } from "./DebugReporter";
 import { addVariation } from "@/lib/storage";
 import { downloadPng, downloadSvg } from "@/lib/export";
@@ -62,8 +63,10 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
   const [playing, setPlaying] = useState(true);
   const isSolar = slug === "solar-budget-skin";
   const isYield = slug === "facade-yield-map";
-  const [controlsOpen, setControlsOpen] = useState(false); // phone only, solar and yield slugs
-  const phoneToggle = isSolar || isYield;
+  const isCavity = slug === "stack-effect-cavity";
+  const growsWithContent = isYield || isCavity;
+  const [controlsOpen, setControlsOpen] = useState(false); // phone only, solar, yield and cavity slugs
+  const phoneToggle = isSolar || growsWithContent;
 
   const handleStats = useCallback((s: PatternStats) => {
     setStats(s);
@@ -179,6 +182,8 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
     />
   ) : isYield ? (
     <YieldMap params={staticParams} />
+  ) : isCavity ? (
+    <StackCavity params={staticParams} />
   ) : (
     <PatternCanvas
       pattern={pattern}
@@ -195,14 +200,14 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
         className={
           isSolar
             ? "relative h-[80vh] min-h-[480px] w-full overflow-hidden bg-canvas"
-            : isYield
+            : growsWithContent
               ? "relative min-h-[80vh] w-full overflow-hidden bg-canvas"
               : "relative w-full bg-canvas sm:h-[80vh] sm:min-h-[480px] sm:overflow-hidden"
         }
       >
         <div
           className={
-            isYield
+            growsWithContent
               ? "relative sm:mr-[min(340px,38vw)]"
               : isSolar
               ? "absolute inset-y-0 left-0 right-0 sm:right-[min(340px,38vw)]"
@@ -219,7 +224,7 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
           <button
             type="button"
             onClick={() => setControlsOpen((o) => !o)}
-            className={`${isYield && controlsOpen ? "fixed top-4 z-50" : "absolute bottom-4 z-30"} inset-x-4 rounded-full border border-line bg-canvas py-2 text-sm text-ink sm:hidden`}
+            className={`${growsWithContent && controlsOpen ? "fixed top-4 z-50" : "absolute bottom-4 z-30"} inset-x-4 rounded-full border border-line bg-canvas py-2 text-sm text-ink sm:hidden`}
             aria-expanded={controlsOpen}
           >
             {controlsOpen ? "Hide controls ▴" : "Show controls ▾"}
@@ -298,7 +303,7 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
           className={
             isSolar
               ? `absolute bottom-0 right-0 top-0 z-20 ${controlsOpen ? "flex" : "hidden sm:flex"} w-full max-w-md flex-col overflow-hidden sm:w-[min(340px,38vw)]`
-              : isYield
+              : growsWithContent
                 ? `absolute bottom-0 right-0 top-0 z-20 ${controlsOpen ? "flex" : "hidden sm:flex"} max-sm:fixed max-sm:inset-0 max-sm:z-40 max-sm:max-w-none max-sm:bg-canvas w-full max-w-md flex-col overflow-hidden sm:w-[min(340px,38vw)]`
                 : "relative z-20 flex w-full flex-col border-t border-line/60 sm:absolute sm:bottom-0 sm:right-0 sm:top-0 sm:w-[min(340px,38vw)] sm:max-w-md sm:overflow-hidden sm:border-t-0"
           }

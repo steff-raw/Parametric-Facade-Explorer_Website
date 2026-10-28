@@ -72,3 +72,16 @@ export function solve(p: CavityParams): CavityResult {
     flag,
   };
 }
+
+export const SWEEP_OPENINGS = [100, 50, 25] as const;
+
+/** Opening-area sweep at the same gain: 100 / 50 / 25 % of the full-section vent. */
+export function sweep(p: CavityParams) {
+  return SWEEP_OPENINGS.map((opening) => ({ opening, res: solve({ ...p, opening: p.opening * (opening / 100) }) }));
+}
+
+/** % of flow lost when the vents are halved (about 37, not 50, because Q ~ A^(2/3)). 0 when there is no flow. */
+export function halvingLoss(p: CavityParams): number {
+  const [full, half] = sweep(p);
+  return full.res.Q > 0 ? 100 * (1 - half.res.Q / full.res.Q) : 0;
+}

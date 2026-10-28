@@ -54,6 +54,17 @@ const gr = g.Q / a.Q;
 check("g", `blind off: Q x (1/${F_BLIND})^(1/3) = 0.737 +-0.01`, `x${f(gr, 3)} P ${f(g.P)}`,
   near(gr, 0.737, 0.01) && near(g.P, a.P / F_BLIND, 1e-9));
 
+// (h) Stage 2 view helpers: sweep rows, halving verdict, particle speed ratio
+const sw = E.sweep(D);
+check("h1", "sweep(D): openings 100/50/25 and ACH 211/133/84",
+  sw.map((r) => `${r.opening}:${f(r.res.ach, 0)}`).join(" "),
+  sw.map((r) => r.opening).join() === "100,50,25" && near(sw[1].res.ach, 133, 1) && near(sw[2].res.ach, 84, 1));
+const loss = E.halvingLoss(D);
+check("h2", "halving vents loses 37% (ACH 133.1/211.3)", `${f(loss, 1)}%`, near(loss, 37, 0.5));
+check("h3", "halvingLoss at no-gain is finite 0", `${E.halvingLoss({ ...D, gain: 0 })}`, E.halvingLoss({ ...D, gain: 0 }) === 0);
+const vr = s[2].vCavity / a.vCavity;
+check("h4", "particle speed at 25% vents = 0.40 x default (0.397)", f(vr, 3), near(vr, 0.4, 0.005));
+
 console.log("\nStack-Effect Cavity, Stage 1 checks\n");
 console.log(`default: Q ${f(a.Q)} m3/s | dT +${f(a.dT)} K | ${f(a.ach, 0)} ACH | v ${f(a.vCavity)} m/s | vent ${f(a.vVent)} m/s | P ${f(a.P / 1000, 1)} kW | A ${f(a.A, 1)} m2\n`);
 console.log("id  result  check -> got");
