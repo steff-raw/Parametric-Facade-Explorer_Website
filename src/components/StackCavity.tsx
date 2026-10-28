@@ -10,7 +10,7 @@
 import { ReactNode, useEffect, useMemo, useRef } from "react";
 import { PatternParams } from "@/lib/patterns";
 import { defaults } from "@/lib/patterns/stack-cavity";
-import { DEFAULT_PARAMS, F_BLIND, G, halvingLoss, solve, sweep } from "@/lib/patterns/stack-cavity/engine";
+import { DEFAULT_PARAMS, F_BLIND, G, halvingLoss, solve, sweep, sweepLabel } from "@/lib/patterns/stack-cavity/engine";
 
 const MUTED = "#8a8a8a";
 const N = 36; // particles
@@ -24,7 +24,7 @@ const mix = (a: number[], b: number[], t: number) => a.map((v, i) => Math.round(
 // Same pseudo-random layout on server and client.
 const SEEDS = Array.from({ length: N }, (_, i) => {
   const r = (k: number) => { const s = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453; return s - Math.floor(s); };
-  return { x: X0 + 10 + r(1) * (X1 - X0 - 20), phase: r(2), factor: 0.65 + r(3) * 0.7, size: 1.6 + r(4) * 2 };
+  return { x: Number((X0 + 10 + r(1) * (X1 - X0 - 20)).toFixed(2)), phase: r(2), factor: 0.65 + r(3) * 0.7, size: 1.6 + r(4) * 2 };
 });
 
 function Card({ title, children, ...rest }: { title: string; children: ReactNode } & Record<string, unknown>) {
@@ -149,11 +149,13 @@ export default function StackCavity({ params }: { params: PatternParams }) {
             <div className="space-y-1 font-mono text-[11px] leading-relaxed text-ink sm:text-xs">
               <div>Q = Cd × A × √(g·H·ΔT/T) (equal in/out vents). A = {f(cp.opening, 0)} % × {f(section, 1)} m² = {f(res.A, 1)} m², Cd {cp.cd}, T = {f(T, 1)} K</div>
               <div>P = {f(cp.gain / (cp.blind ? 1 : F_BLIND), 0)} W/m² × {f(cp.W * cp.H, 0)} m² = {f(res.P / 1000, 1)} kW{cp.blind ? "" : ` (blind off: ${cp.gain} / f_blind ${F_BLIND}, assumed)`}</div>
-              <div>Q^1.5 = Cd·A·√(g·H/T)·√(P/1200) = {f(cp.cd * res.A * Math.sqrt((G * cp.H) / T) * Math.sqrt(res.P / 1200))} ⇒ Q = {noFlow ? "0" : f(res.Q)} m³/s</div>
+              <div>Q^1.5 = Cd·A·√(g·H/T)·√(P/1200) = {f(cp.cd * res.A * Math.sqrt((G * cp.H) / T) * Math.sqrt(res.P / 1200))} ⇒ Q = {noFlow ? "— (no flow)" : `${f(res.Q)} m³/s`}</div>
               <div>ΔT = P / (ρ·cp·Q) = {noFlow ? "—" : `${f(res.P / 1000, 1)} kW / (1200 × ${f(res.Q)}) = +${f(res.dT)} K`}</div>
               <div>ACH = Q × 3600 / ({f(cp.W, 1)} × {f(cp.depth, 1)} × {cp.H} = {f(res.volume, 1)} m³) = {noFlow ? "—" : f(res.ach, 0)}</div>
               <div className="pt-1 font-sans text-muted">
-                Doubling H to {cp.H * 2} m: Q × {f(dbl.g)} at fixed W/m² (total power doubles); Q × {f(dbl.p)} at fixed total power (W/m² halves).
+                {noFlow
+                  ? `Doubling H to ${cp.H * 2} m: no flow at this setting, so no ratio.`
+                  : `Doubling H to ${cp.H * 2} m: Q × ${f(dbl.g)} at fixed W/m² (total power doubles); Q × ${f(dbl.p)} at fixed total power (W/m² halves).`}
               </div>
             </div>
           </Card>
@@ -161,8 +163,8 @@ export default function StackCavity({ params }: { params: PatternParams }) {
           <Card title="Opening-area sweep (same solar gain): Q scales as A^(2/3), not A" data-sweep>
             <div className="space-y-2 text-xs tabular-nums">
               {rows.map((r) => (
-                <div key={r.opening} className="grid grid-cols-[88px_1fr_96px] items-center gap-2 sm:grid-cols-[110px_1fr_130px]" data-sweep-row={r.opening}>
-                  <span className="text-muted">A {r.opening}% ({f(r.res.A, 1)} m²)</span>
+                <div key={r.opening} className="grid grid-cols-[132px_1fr_96px] items-center gap-2 sm:grid-cols-[150px_1fr_130px]" data-sweep-row={r.opening}>
+                  <span className="text-muted">{sweepLabel(r)}</span>
                   <span className="h-3 bg-[#969696]" style={{ width: `${Math.round((r.res.ach / maxAch) * 100)}%` }} />
                   <span className="text-ink">{r.res.flag ? "no flow" : `${f(r.res.ach, 0)} ACH +${f(r.res.dT)} K`}</span>
                 </div>

@@ -65,6 +65,20 @@ check("h3", "halvingLoss at no-gain is finite 0", `${E.halvingLoss({ ...D, gain:
 const vr = s[2].vCavity / a.vCavity;
 check("h4", "particle speed at 25% vents = 0.40 x default (0.397)", f(vr, 3), near(vr, 0.4, 0.005));
 
+// (i) S2-1: sweep labels are absolute, at a non-100% current opening (50%: 3.6 m2 section)
+const sw50 = E.sweep({ ...D, opening: 50 });
+const lab = sw50.map((r) => E.sweepLabel(r));
+check("i1", "opening 50: sweep labels x1/x1/2/x1/4 = 50/25/12.5 % = 1.80/0.90/0.45 m2",
+  lab.join(" | "),
+  lab[0] === "×1 · 50% · 1.80 m²" && lab[1] === "×½ · 25% · 0.90 m²" && lab[2] === "×¼ · 12.5% · 0.45 m²");
+check("i2", "opening 50: sweep row areas match solve at the absolute opening",
+  sw50.map((r) => f(r.res.A, 2)).join("/"),
+  near(sw50[1].res.A, 0.9, 1e-9) && near(sw50[2].res.A, 0.45, 1e-9));
+const lab100 = E.sweep(D).map((r) => E.sweepLabel(r));
+check("i3", "opening 100: labels 100/50/25 %, 3.6/1.8/0.9 m2 (A to 1 dp at >=1 m2 not forced)",
+  lab100.join(" | "),
+  lab100[0] === "×1 · 100% · 3.60 m²" && lab100[2] === "×¼ · 25% · 0.90 m²");
+
 console.log("\nStack-Effect Cavity, Stage 1 checks\n");
 console.log(`default: Q ${f(a.Q)} m3/s | dT +${f(a.dT)} K | ${f(a.ach, 0)} ACH | v ${f(a.vCavity)} m/s | vent ${f(a.vVent)} m/s | P ${f(a.P / 1000, 1)} kW | A ${f(a.A, 1)} m2\n`);
 console.log("id  result  check -> got");

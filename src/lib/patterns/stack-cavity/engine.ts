@@ -77,7 +77,13 @@ export const SWEEP_OPENINGS = [100, 50, 25] as const;
 
 /** Opening-area sweep at the same gain: 100 / 50 / 25 % of the full-section vent. */
 export function sweep(p: CavityParams) {
-  return SWEEP_OPENINGS.map((opening) => ({ opening, res: solve({ ...p, opening: p.opening * (opening / 100) }) }));
+  return SWEEP_OPENINGS.map((opening) => ({ opening, abs: p.opening * (opening / 100), res: solve({ ...p, opening: p.opening * (opening / 100) }) }));
+}
+
+const SCALE: Record<number, string> = { 100: "×1", 50: "×½", 25: "×¼" };
+/** Row label: scale of the current vents, absolute opening % and area (2 dp). */
+export function sweepLabel(r: ReturnType<typeof sweep>[number]): string {
+  return `${SCALE[r.opening]} · ${Number(r.abs.toFixed(1))}% · ${r.res.A.toFixed(2)} m²`;
 }
 
 /** % of flow lost when the vents are halved (about 37, not 50, because Q ~ A^(2/3)). 0 when there is no flow. */
