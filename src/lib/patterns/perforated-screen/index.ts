@@ -78,7 +78,7 @@ export const meta: PatternMeta = {
       min: 0,
       max: HOLE_MOTIF_COUNT - 1,
       step: 1,
-      default: 0,
+      default: HOLE_MOTIF_COUNT - 1, // plain circle
     },
   ],
 };

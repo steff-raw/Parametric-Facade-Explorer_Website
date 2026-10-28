@@ -110,6 +110,7 @@ function labelsB(): string[] {
     "Diagonal hatch 2",
     "Dashed grid",
     "Diagonal dashes",
+    "Plain circle",
   ];
 }
 

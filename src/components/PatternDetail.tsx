@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   getPattern,
@@ -67,6 +67,23 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
   const growsWithContent = isYield || isCavity;
   const [controlsOpen, setControlsOpen] = useState(false); // phone only, solar, yield and cavity slugs
   const phoneToggle = isSolar || growsWithContent;
+
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [moreBelow, setMoreBelow] = useState(false);
+  const updateMore = useCallback(() => {
+    const el = panelRef.current;
+    if (!el) return;
+    setMoreBelow(el.scrollHeight - el.scrollTop - el.clientHeight > 8);
+  }, []);
+  useEffect(() => {
+    const el = panelRef.current;
+    if (!el) return;
+    updateMore();
+    const ro = new ResizeObserver(updateMore);
+    ro.observe(el);
+    if (el.firstElementChild) ro.observe(el.firstElementChild);
+    return () => ro.disconnect();
+  }, [updateMore, slug, stats]);
 
   const handleStats = useCallback((s: PatternStats) => {
     setStats(s);
@@ -208,10 +225,12 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
         <div
           className={
             growsWithContent
-              ? "relative sm:mr-[min(340px,38vw)]"
+              ? "relative max-sm:pt-4 sm:mr-[min(340px,38vw)]"
               : isSolar
               ? "absolute inset-y-0 left-0 right-0 sm:right-[min(340px,38vw)]"
-              : "relative h-[70vh] min-h-[360px] w-full sm:absolute sm:inset-0 sm:h-auto sm:min-h-0"
+              : is3D
+                ? "relative h-[70vh] min-h-[360px] w-full sm:absolute sm:inset-0 sm:h-auto sm:min-h-0"
+                : "relative h-[70vh] min-h-[360px] w-full sm:absolute sm:inset-y-0 sm:left-0 sm:right-[min(340px,38vw)] sm:h-auto sm:min-h-0"
           }
         >
           <DebugErrorBoundary label={pattern.meta.slug}>
@@ -232,7 +251,7 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
         )}
 
         {/* Top chrome */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 bg-gradient-to-b from-[#0d0d0d]/90 via-[#0d0d0d]/45 to-transparent px-5 pb-16 pt-5 md:px-8">
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-30 bg-gradient-to-b from-[#0d0d0d]/90 via-[#0d0d0d]/45 to-transparent px-5 pb-16 pt-5 md:px-8">
           <div className="pointer-events-auto flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
               <h1 className="text-2xl font-bold tracking-tight text-ink md:text-3xl">
@@ -270,29 +289,29 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
                 </button>
               </div>
             </div>
-            <div className="flex items-center gap-3 text-sm text-muted">
+            <div className="flex items-center gap-3 text-sm text-ink">
               {prev ? (
                 <Link
                   href={`/patterns/${prev}`}
-                  className="hover:text-accent"
+                  className="py-1 hover:text-accent"
                   aria-label="Previous pattern"
                 >
                   ← Prev
                 </Link>
               ) : (
-                <span className="opacity-30">← Prev</span>
+                <span className="py-1 opacity-30">← Prev</span>
               )}
               <span className="text-line">|</span>
               {next ? (
                 <Link
                   href={`/patterns/${next}`}
-                  className="hover:text-accent"
+                  className="py-1 hover:text-accent"
                   aria-label="Next pattern"
                 >
                   Next →
                 </Link>
               ) : (
-                <span className="opacity-30">Next →</span>
+                <span className="py-1 opacity-30">Next →</span>
               )}
             </div>
           </div>
@@ -317,6 +336,8 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
             }
           />
           <div
+            ref={panelRef}
+            onScroll={updateMore}
             className={
               phoneToggle
                 ? "relative flex h-full flex-col overflow-y-auto px-5 py-6 pb-20 pt-24 sm:pb-6 md:px-6"
@@ -338,7 +359,7 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
 
             {pattern.meta.slug === "perforated-screen" && (
               <MotifPicker
-                value={Math.round(params.holeShape ?? 0)}
+                value={Math.round(params.holeShape ?? pattern.defaults.holeShape)}
                 onChange={(id) => onChange("holeShape", id)}
               />
             )}
@@ -435,6 +456,14 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
               </p>
             </div>
           </div>
+          {moreBelow && (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 bottom-0 z-10 hidden h-16 items-end justify-center bg-gradient-to-t from-[#0d0d0d] to-transparent pb-2 text-[11px] uppercase tracking-tag text-muted sm:flex"
+            >
+              more ↓
+            </div>
+          )}
         </aside>
       </section>
       {isSolar && <SolarFootnote params={staticParams} />}
