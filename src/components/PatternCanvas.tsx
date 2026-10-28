@@ -181,7 +181,7 @@ export function PatternThumbnail({
       className={`relative aspect-square w-full overflow-hidden bg-canvas ${className}`}
     >
       <div
-        className="h-full w-full [&>svg]:h-full [&>svg]:w-full"
+        className="h-full w-full [&>svg]:h-full [&>svg]:w-full [&_[stroke-width='0.2']]:[stroke-width:0.7px]"
         dangerouslySetInnerHTML={{ __html: svg }}
         aria-hidden
       />

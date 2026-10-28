@@ -92,8 +92,8 @@ export default function Gallery() {
           onClick={() => setSort("recent")}
           className={
             sort === "recent"
-              ? "text-ink"
-              : "hover:text-accent transition-colors"
+              ? "text-ink max-sm:min-h-8 max-sm:px-1"
+              : "hover:text-accent transition-colors max-sm:min-h-8 max-sm:px-1"
           }
         >
           Recent
@@ -104,8 +104,8 @@ export default function Gallery() {
           onClick={() => setSort("popular")}
           className={
             sort === "popular"
-              ? "text-ink"
-              : "hover:text-accent transition-colors"
+              ? "text-ink max-sm:min-h-8 max-sm:px-1"
+              : "hover:text-accent transition-colors max-sm:min-h-8 max-sm:px-1"
           }
         >
           Popular

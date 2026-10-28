@@ -216,10 +216,11 @@ export default function StudioApp() {
             {DRIVER_DEFS[spec.driver].map((d) => (
               <Slider key={d.key} def={d} value={spec[d.key as NumKey]} onChange={set} />
             ))}
-            <label className="flex items-center gap-2 text-sm text-ink">
+            <label className="flex items-center gap-2 text-sm text-ink max-sm:min-h-8">
               <input
                 id="invert"
                 type="checkbox"
+                className="max-sm:h-5 max-sm:w-5"
                 checked={spec.invert}
                 onChange={(e) => setSpec((s) => ({ ...s, invert: e.target.checked }))}
               />

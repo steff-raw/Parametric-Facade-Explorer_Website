@@ -261,7 +261,7 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
                 <button
                   type="button"
                   onClick={handleShare}
-                  className="inline-flex items-center gap-1.5 text-sm transition-colors hover:text-accent"
+                  className="inline-flex items-center gap-1.5 text-sm transition-colors hover:text-accent max-sm:min-h-8 max-sm:min-w-8 max-sm:justify-center"
                   title="Copy link"
                 >
                   <IconShare />
@@ -272,7 +272,7 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
                 <button
                   type="button"
                   onClick={handleDownloadSvg}
-                  className="inline-flex items-center gap-1.5 text-sm transition-colors hover:text-accent"
+                  className="inline-flex items-center gap-1.5 text-sm transition-colors hover:text-accent max-sm:min-h-8 max-sm:min-w-8 max-sm:justify-center"
                   title="Download SVG"
                 >
                   <IconDownload />
@@ -281,7 +281,7 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
                 <button
                   type="button"
                   onClick={handleDownloadPng}
-                  className="inline-flex items-center gap-1.5 text-sm transition-colors hover:text-accent"
+                  className="inline-flex items-center gap-1.5 text-sm transition-colors hover:text-accent max-sm:min-h-8 max-sm:min-w-8 max-sm:justify-center"
                   title="Download PNG"
                 >
                   <IconImage />
@@ -293,7 +293,7 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
               {prev ? (
                 <Link
                   href={`/patterns/${prev}`}
-                  className="py-1 hover:text-accent"
+                  className="py-1 hover:text-accent max-sm:inline-flex max-sm:min-h-8 max-sm:items-center"
                   aria-label="Previous pattern"
                 >
                   ← Prev
@@ -305,7 +305,7 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
               {next ? (
                 <Link
                   href={`/patterns/${next}`}
-                  className="py-1 hover:text-accent"
+                  className="py-1 hover:text-accent max-sm:inline-flex max-sm:min-h-8 max-sm:items-center"
                   aria-label="Next pattern"
                 >
                   Next →
