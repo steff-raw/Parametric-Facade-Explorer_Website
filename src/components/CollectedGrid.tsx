@@ -35,7 +35,7 @@ export default function CollectedGrid() {
         </p>
         <Link
           href="/"
-          className="mt-8 inline-block text-sm text-ink underline underline-offset-4 hover:text-accent"
+          className="mt-8 inline-block text-sm max-sm:py-2.5 text-ink underline underline-offset-4 hover:text-accent"
         >
           Browse patterns →
         </Link>

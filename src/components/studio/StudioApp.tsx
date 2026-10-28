@@ -220,7 +220,7 @@ export default function StudioApp() {
               <input
                 id="invert"
                 type="checkbox"
-                className="max-sm:h-5 max-sm:w-5"
+                className="max-sm:h-8 max-sm:w-8"
                 checked={spec.invert}
                 onChange={(e) => setSpec((s) => ({ ...s, invert: e.target.checked }))}
               />

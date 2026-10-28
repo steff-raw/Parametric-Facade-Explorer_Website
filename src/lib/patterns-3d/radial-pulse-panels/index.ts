@@ -172,7 +172,7 @@ export function generatePreviewSvg(staticParams?: PatternParams): string {
     for (let c = 0; c < cols; c++) {
       const rad =
         Math.hypot(c - (cols - 1) / 2, r - (rows - 1) / 2) / maxR;
-      const opacity = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(rad * Math.PI * 2));
+      const opacity = 0.6 + 0.4 * (0.5 + 0.5 * Math.sin(rad * Math.PI * 2));
       const x = margin + c * cellW + cellW * pad;
       const y = margin + r * cellH + cellH * pad;
       const w = cellW * (1 - pad * 2);

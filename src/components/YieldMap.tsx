@@ -236,7 +236,7 @@ export default function YieldMap({ params }: { params: PatternParams }) {
         </p>
         <p>
           {srcBefore}
-          <a href={LONDON_SOURCE} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-accent">
+          <a href={LONDON_SOURCE} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-accent max-sm:inline-block max-sm:py-2">
             Camden planning document
           </a>
           {srcAfter}

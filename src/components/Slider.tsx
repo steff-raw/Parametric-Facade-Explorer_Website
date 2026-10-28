@@ -65,7 +65,7 @@ export default function Slider({ def, value, onChange }: SliderProps) {
                 type="button"
                 onClick={() => onChange(def.key, optVal)}
                 className={[
-                  "text-[10px] uppercase tracking-tag transition-colors",
+                  "text-[10px] uppercase tracking-tag transition-colors max-sm:min-h-8 max-sm:px-1",
                   active ? "text-ink" : "text-muted hover:text-ink",
                 ].join(" ")}
               >
