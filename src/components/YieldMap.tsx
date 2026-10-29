@@ -77,7 +77,7 @@ export default function YieldMap({ params }: { params: PatternParams }) {
   const gridH = TOP + GRID + CUT_H;
   const colH = 20 + colMax + 26;
   const higher = view.rows.loss === view.cols.loss ? null : view.rows.loss > view.cols.loss ? "rows" : "cols";
-  const [srcBefore, srcAfter] = LONDON_FOOTNOTE.split("Camden planning document");
+  const [srcBefore, srcAfter] = LONDON_FOOTNOTE.split("PVGIS 5.2");
 
   return (
     <div className="px-4 pb-24 pt-[104px] sm:pb-8 md:pl-12">
@@ -237,7 +237,7 @@ export default function YieldMap({ params }: { params: PatternParams }) {
         <p>
           {srcBefore}
           <a href={LONDON_SOURCE} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-accent">
-            Camden planning document
+            PVGIS 5.2
           </a>
           {srcAfter}
         </p>
