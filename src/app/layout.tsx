@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import Header from "@/components/Header";
 import DevDebugMount from "@/components/DevDebugMount";
 import "./globals.css";
@@ -30,6 +31,7 @@ export default function RootLayout({
         <Header />
         <main>{children}</main>
         <DevDebugMount />
+        <Analytics />
       </body>
     </html>
   );
