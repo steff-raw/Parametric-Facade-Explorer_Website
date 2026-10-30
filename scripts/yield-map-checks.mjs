@@ -201,16 +201,16 @@ check("p", "centre vs 2 x 2 points per module: max difference <= 2%", `${f(100 *
 
 // (q) London comparison via PVGIS
 const PVGIS = "https://re.jrc.ec.europa.eu/api/v5_2/PVcalc?lat=51.5&lon=-0.1&peakpower=1&loss=14&angle=0&aspect=0&outputformat=json";
-const FALLBACK = "PVGIS not reachable, 975 approximate/secondary";
+const FALLBACK = "PVGIS not reachable, footnote checked against the 1,084 fetched 2026-10-29";
 let qLine = FALLBACK, qPass;
 try {
   const res = await fetch(PVGIS, { signal: AbortSignal.timeout(15000) });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const hy = (await res.json()).outputs.totals.fixed["H(i)_y"];
   qLine = `PVGIS horizontal London ${f(hy, 0)} kWh/m2 yr, ${PVGIS}, fetched ${new Date().toISOString().slice(0, 10)}`;
-  qPass = false; // footnote still says "about 975": it must be updated to the PVGIS value before this passes
+  qPass = E.LONDON_FOOTNOTE.includes("PVGIS 5.2") && Math.abs(hy / 1084 - 1) <= 0.05; // footnote cites 1,084: re-check if PVGIS moves by more than 5%
 } catch {
-  qPass = E.LONDON_FOOTNOTE.includes("about 975") && E.LONDON_FOOTNOTE.includes("approximate") && E.LONDON_FOOTNOTE.includes("secondary source");
+  qPass = E.LONDON_FOOTNOTE.includes("1,084") && E.LONDON_FOOTNOTE.includes("PVGIS 5.2");
 }
 check("q", "London: PVGIS value printed, or fallback line; footnote matches", qLine, qPass);
 
