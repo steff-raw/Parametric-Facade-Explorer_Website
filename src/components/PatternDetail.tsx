@@ -213,7 +213,7 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
             ? "relative h-[80vh] min-h-[480px] w-full overflow-hidden bg-canvas"
             : growsWithContent
               ? "relative min-h-[80vh] w-full overflow-hidden bg-canvas"
-              : "relative w-full bg-canvas sm:h-[80vh] sm:min-h-[480px] sm:overflow-hidden"
+                          : "relative w-full bg-canvas sm:flex sm:min-h-[80vh]"
         }
       >
         <div
@@ -221,14 +221,14 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
             isAdaptive
               ? "relative w-full"
               : growsWithContent
-              ? "relative sm:mr-[min(340px,38vw)]"
+              ? "relative max-sm:pt-12 sm:mr-[min(340px,38vw)]"
               : isSolar
               ? "absolute inset-y-0 left-0 right-0 sm:right-[min(340px,38vw)]"
-              : "relative h-[70vh] min-h-[360px] w-full sm:absolute sm:inset-0 sm:h-auto sm:min-h-0"
+              : "relative h-[70vh] min-h-[360px] w-full sm:h-auto sm:min-h-[80vh] sm:min-w-0 sm:flex-1"
           }
         >
           <DebugErrorBoundary label={pattern.meta.slug}>
-            {viewer}
+            {isSolar || growsWithContent ? viewer : <div className={is3D ? "absolute inset-0 sm:sticky sm:top-0 sm:h-[80vh] sm:min-h-[480px]" : "absolute inset-0"}>{viewer}</div>}
           </DebugErrorBoundary>
           {isSolar && <SolarOverlay params={staticParams} hidden={controlsOpen} />}
         </div>
@@ -245,7 +245,7 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
         )}
 
         {/* Top chrome */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 bg-gradient-to-b from-[#0d0d0d]/90 via-[#0d0d0d]/45 to-transparent px-5 pb-16 pt-5 md:px-8">
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-30 bg-gradient-to-b from-[#0d0d0d]/90 via-[#0d0d0d]/45 to-transparent px-5 pb-16 pt-5 md:px-8">
           <div className="pointer-events-auto flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
               <h1 className="text-2xl font-bold tracking-tight text-ink md:text-3xl">
@@ -255,7 +255,7 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
                 <button
                   type="button"
                   onClick={handleShare}
-                  className="inline-flex items-center gap-1.5 text-sm transition-colors hover:text-accent"
+                  className="inline-flex items-center gap-1.5 text-sm transition-colors hover:text-accent max-sm:min-h-8 max-sm:min-w-8 max-sm:justify-center"
                   title="Copy link"
                 >
                   <IconShare />
@@ -266,7 +266,7 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
                 <button
                   type="button"
                   onClick={handleDownloadSvg}
-                  className="inline-flex items-center gap-1.5 text-sm transition-colors hover:text-accent"
+                  className="inline-flex items-center gap-1.5 text-sm transition-colors hover:text-accent max-sm:min-h-8 max-sm:min-w-8 max-sm:justify-center"
                   title="Download SVG"
                 >
                   <IconDownload />
@@ -275,7 +275,7 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
                 <button
                   type="button"
                   onClick={handleDownloadPng}
-                  className="inline-flex items-center gap-1.5 text-sm transition-colors hover:text-accent"
+                  className="inline-flex items-center gap-1.5 text-sm transition-colors hover:text-accent max-sm:min-h-8 max-sm:min-w-8 max-sm:justify-center"
                   title="Download PNG"
                 >
                   <IconImage />
@@ -293,29 +293,29 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-3 text-sm text-muted">
+            <div className="flex items-center gap-3 text-sm text-ink">
               {prev ? (
                 <Link
                   href={`/patterns/${prev}`}
-                  className="hover:text-accent"
+                  className="py-1 hover:text-accent max-sm:inline-flex max-sm:min-h-8 max-sm:items-center"
                   aria-label="Previous pattern"
                 >
                   ← Prev
                 </Link>
               ) : (
-                <span className="opacity-30">← Prev</span>
+                <span className="py-1 opacity-30">← Prev</span>
               )}
               <span className="text-line">|</span>
               {next ? (
                 <Link
                   href={`/patterns/${next}`}
-                  className="hover:text-accent"
+                  className="py-1 hover:text-accent max-sm:inline-flex max-sm:min-h-8 max-sm:items-center"
                   aria-label="Next pattern"
                 >
                   Next →
                 </Link>
               ) : (
-                <span className="opacity-30">Next →</span>
+                <span className="py-1 opacity-30">Next →</span>
               )}
             </div>
           </div>
@@ -329,7 +329,7 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
               ? `absolute bottom-0 right-0 top-0 z-20 ${controlsOpen ? "flex" : "hidden sm:flex"} w-full max-w-md flex-col overflow-hidden sm:w-[min(340px,38vw)]`
               : growsWithContent
                 ? `absolute bottom-0 right-0 top-0 z-20 ${controlsOpen ? "flex" : "hidden sm:flex"} max-sm:fixed max-sm:inset-0 max-sm:z-40 max-sm:max-w-none max-sm:bg-canvas w-full max-w-md flex-col overflow-hidden sm:w-[min(340px,38vw)]`
-                : "relative z-20 flex w-full flex-col border-t border-line/60 sm:absolute sm:bottom-0 sm:right-0 sm:top-0 sm:w-[min(340px,38vw)] sm:max-w-md sm:overflow-hidden sm:border-t-0"
+                              : "relative z-20 flex w-full flex-col border-t border-line/60 sm:w-[min(340px,38vw)] sm:max-w-md sm:shrink-0 sm:border-t-0"
           }
           aria-label="Pattern controls"
         >
@@ -344,7 +344,7 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
             className={
               phoneToggle
                 ? "relative flex h-full flex-col overflow-y-auto px-5 py-6 pb-20 pt-24 sm:pb-6 md:px-6"
-                : "relative flex flex-col px-5 py-6 sm:h-full sm:overflow-y-auto sm:pt-24 md:px-6"
+                                : "relative flex flex-col px-5 py-6 sm:pt-24 md:px-6"
             }
           >
             <div className="flex flex-col gap-6">
@@ -362,7 +362,7 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
 
             {pattern.meta.slug === "perforated-screen" && (
               <MotifPicker
-                value={Math.round(params.holeShape ?? 0)}
+                value={Math.round(params.holeShape ?? pattern.defaults.holeShape)}
                 onChange={(id) => onChange("holeShape", id)}
               />
             )}
@@ -376,7 +376,7 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
                   <button
                     type="button"
                     onClick={() => setPlaying((p) => !p)}
-                    className="inline-flex items-center gap-1.5 text-sm text-ink underline underline-offset-4 transition-colors hover:text-accent"
+                    className="inline-flex items-center gap-1.5 text-sm text-ink underline underline-offset-4 transition-colors hover:text-accent max-sm:min-h-8"
                     aria-pressed={playing}
                   >
                     {playing ? (
@@ -407,14 +407,14 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
               <button
                 type="button"
                 onClick={save}
-                className="text-ink underline underline-offset-4 transition-colors hover:text-accent"
+                className="text-ink underline underline-offset-4 transition-colors hover:text-accent max-sm:min-h-8"
               >
                 {savedFlash ? "Saved" : "Save variation"}
               </button>
               <button
                 type="button"
                 onClick={reset}
-                className="text-muted underline underline-offset-4 transition-colors hover:text-accent"
+                className="text-muted underline underline-offset-4 transition-colors hover:text-accent max-sm:min-h-8"
               >
                 Reset to defaults
               </button>
@@ -452,7 +452,7 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
                 Want this for your project?{" "}
                 <a
                   href="mailto:hello@example.com?subject=Facade%20pattern%20inquiry"
-                  className="text-ink underline underline-offset-4 transition-colors hover:text-accent"
+                  className="inline-flex items-center text-ink underline underline-offset-4 transition-colors hover:text-accent max-sm:min-h-8"
                 >
                   Contact us →
                 </a>
