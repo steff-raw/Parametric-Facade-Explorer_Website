@@ -17,6 +17,7 @@ import {
   CAMERA,
   CELL,
   CAPPED,
+  COMPASS,
   ELEMENT,
   LIGHT_DISTANCE,
   MAX_FRAME_DT,
@@ -476,15 +477,8 @@ export default function AdaptivePanel3D(props: AdaptivePanel3DProps) {
         </mesh>
         <gridHelper args={[11, 11, "#2a2a2a", "#1f1f1f"]} position={[0, 0.002, 2]} />
 
-        {(
-          [
-            // W and S sit off the grid's west / south edges, clear of the depth labels at the wall bases.
-            ["W", [-6.5, 0, -4]],
-            ["E", [6, 0, 2]],
-            ["S", [0, 0, 11]],
-            ["N", [0, 0, -4]],
-          ] as [string, Vec3][]
-        ).map(([t, p]) => (
+        {/* W and S sit off the grid's west / south edges, clear of the depth labels; N north-west, clear of both walls. */}
+        {(Object.entries(COMPASS) as [string, Vec3][]).map(([t, p]) => (
           <Html key={t} position={p} center className={`${label} text-center`}>
             {t}
           </Html>

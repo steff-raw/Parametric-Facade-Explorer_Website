@@ -10,7 +10,7 @@ import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { PatternParams } from "@/lib/patterns";
 import { CHART_HOURS, dayResult, depthSeries, gain } from "@/lib/patterns-3d/adaptive-panel/engine";
-import { DAY_LABELS, fmtHour, generatePreviewSvg, meta, nextHour, readParams, scrubHours, type Focus } from "@/lib/patterns-3d/adaptive-panel";
+import { DAY_LABELS, SOURCE_NOTE, fmtHour, generatePreviewSvg, meta, nextHour, readParams, scrubHours, type Focus } from "@/lib/patterns-3d/adaptive-panel";
 import { addVariation } from "@/lib/storage";
 import Slider from "./Slider";
 import TagPill from "./TagPill";
@@ -211,7 +211,7 @@ export default function AdaptivePanel({ params, onChange, resetViewKey }: Adapti
         <div className="relative z-10 flex flex-col gap-2 px-4 pt-3 sm:pointer-events-none sm:absolute sm:bottom-4 sm:left-8 sm:right-[calc(min(340px,38vw)+2rem)] sm:gap-3 sm:p-0">
           <div className="order-1 sm:order-2">{scrubber}</div>
           <div className="order-2 text-[10px] text-muted sm:hidden">
-            Concept-stage estimate, not compliance · static → kinetic, {DAY_LABELS[day]}
+            Concept-stage estimate, not compliance; {SOURCE_NOTE} · static → kinetic, {DAY_LABELS[day]}
           </div>
           <div className="order-2 flex gap-2 sm:hidden">
             <Chip label="Heat kWh/m²" a={f2(res.static)} b={f2(res.kinetic)} />
@@ -242,7 +242,7 @@ export default function AdaptivePanel({ params, onChange, resetViewKey }: Adapti
           aria-label="Adaptive Panel controls"
         >
           <div className="pointer-events-none absolute inset-0 hidden bg-gradient-to-l from-[#0d0d0d]/95 via-[#0d0d0d]/75 to-transparent sm:block" />
-          <div className="relative flex flex-col gap-3 px-5 py-6 sm:h-full sm:overflow-y-auto sm:pt-24 md:px-6">
+          <div className="relative flex flex-col gap-3 px-5 py-6 sm:h-full sm:gap-2.5 sm:overflow-y-auto sm:pb-4 sm:pt-20 md:px-6">
             <div className="flex flex-wrap gap-2">
               {DAY_LABELS.map((l, i) => (
                 <TagPill key={l} label={l} active={i === day} onClick={() => change("day", i)} />
@@ -274,14 +274,13 @@ export default function AdaptivePanel({ params, onChange, resetViewKey }: Adapti
                   ))}
                 </tbody>
               </table>
-              <p className="mt-2 text-[11px] leading-relaxed text-muted">
-                Totals include diffuse-only shoulder hours outside 07:30 to 16:30; chart and scrubber span 07:30 to 16:30 only.
+              <p className="mt-2 text-[11px] leading-snug text-muted">
+                Totals: all sun-up hours; chart and scrubber 07:30 to 16:30. Gate: profile angle 45° (fixed).
               </p>
             </div>
 
             <Slider def={capDef} value={cap} onChange={change} />
             <Slider def={depthDef} value={staticDepth} onChange={change} />
-            <p className="text-[11px] text-muted">Gate: profile angle 45° (fixed).</p>
 
             <p className="text-[11px] leading-relaxed text-muted sm:hidden">{handCheck}</p>
 
@@ -316,7 +315,7 @@ export default function AdaptivePanel({ params, onChange, resetViewKey }: Adapti
           The value is seasonal, not hourly: kinetic wins on glare and shoulder/winter gain; June heat is a wash.
         </p>
         <p>
-          * Concept estimate, not compliance. Clear sky, single cell, south, 52° N, no HVAC or lighting energy, no annual run.
+          * Concept estimate, not compliance: {SOURCE_NOTE}. Clear sky, single cell, south, 52° N, no HVAC or lighting energy, no annual run.
           Sky view is a relative index, not lux. More solar gain helps only in the heating season.
         </p>
         <details className="mt-1">
@@ -324,7 +323,11 @@ export default function AdaptivePanel({ params, onChange, resetViewKey }: Adapti
           <p className="mt-2">
             Control rule per hour: if the beam misses the glass or the profile angle is under 45°, the blade stays open; else the
             smallest depth (0 to 0.6 m in 0.1 m steps) that keeps gain at or under the cap, else 0.6 m. Hourly midpoints, solar
-            time, g-value 0.6, one 1.5 m cell, head blade only. Glare and sky view over 09:30 to 16:30.
+            time, one 1.5 m cell, head blade only. Glare and sky view over 09:30 to 16:30.
+          </p>
+          <p>
+            Sky: Haurwitz (1945) clear-sky global horizontal irradiance, GHI = 1098 cos Z exp(−0.057 / cos Z) W/m². Assumed, not
+            cited: a fixed 85% beam / 15% diffuse split of GHI and a glass g-value of 0.6.
           </p>
           <p>
             Not modelled: real weather, ground reflection, inter-reflection, frame, thermal mass, HVAC and lighting energy,

@@ -76,10 +76,23 @@ export function bladeTransform(wall: number, row: number, d: number): ElementTra
   return { position: [WALL_X[wall], top - T / 2, d / 2], rotation: ZERO, scale: [CELL - 2 * INSET, T, d] };
 }
 
-// ---- camera rule (J2): fixed view direction, distance grows as the viewer gets narrower
+/** Source line shown next to the gain numbers (docs/cloud-runner.md s6); split and g-value are the engine's assumptions. */
+export const SOURCE_NOTE = "approximate, after Haurwitz (1945) clear-sky global horizontal irradiance, 85% beam / 15% diffuse split, g = 0.6";
+
+/** Compass labels on the ground. N sits north-west of the walls so it never projects onto a wall's base. */
+export const COMPASS: Record<"W" | "E" | "S" | "N", [number, number, number]> = {
+  W: [-6.5, 0, -4],
+  E: [6, 0, 2],
+  S: [0, 0, 11],
+  N: [-2.5, 0, -6],
+};
+
+// ---- camera rule (J2): fixed view direction, distance grows as the viewer gets narrower.
+// refAspect 1.45 (was 1.34): at 390x464 the drawn June arc tails reached NDC 0.99; arc fit wins (J2). Desktop 940x640
+// (aspect 1.47) is unchanged at D0.
 const DIR = [-22, 10, 27];
 const DIR_LEN = Math.hypot(DIR[0], DIR[1], DIR[2]);
-export const CAMERA = { fov: 40, target: [0, 3.5, 3] as [number, number, number], d0: 32, refAspect: 1.34, minDistance: 8, maxDistance: 60 };
+export const CAMERA = { fov: 40, target: [0, 3.5, 3] as [number, number, number], d0: 32, refAspect: 1.45, minDistance: 8, maxDistance: 60 };
 
 export function cameraDistance(aspect: number): number {
   return Math.min(CAMERA.maxDistance, CAMERA.d0 * Math.max(1, CAMERA.refAspect / aspect));

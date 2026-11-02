@@ -200,6 +200,20 @@ for (const [w, h] of viewers) {
     `D ${f(r.D, 1)} x ${f(r.x0)}..${f(r.x1)} y ${f(r.y0)}..${f(r.y1)}`, r.maxAbs <= 0.92);
 }
 
+// (p) the DRAWN arc (every sun-up half-hour, incl. the dim tails behind the facade) inside NDC +-0.92, and >= 16 px
+// from the viewer edges at 390x464 (ui-spec margin)
+for (const [w, h] of [[940, 640], [390, 464]]) {
+  const cam = new THREE.PerspectiveCamera(V.CAMERA.fov, w / h, 0.1, 500);
+  cam.position.set(...V.cameraPosition(w / h));
+  cam.lookAt(...V.CAMERA.target);
+  cam.updateMatrixWorld();
+  const pts = DAY_MONTHS.flatMap((m) => sunPath(m).map(({ vec }) => new THREE.Vector3(...vec.map((v) => v * V.ARC_RADIUS)).project(cam)));
+  const maxAbs = Math.max(...pts.flatMap((v) => [Math.abs(v.x), Math.abs(v.y)]));
+  const px = Math.min(...pts.flatMap((v) => [((1 - Math.abs(v.x)) / 2) * w, ((1 - Math.abs(v.y)) / 2) * h]));
+  check("p", `drawn arc ${w}x${h}: all sun-up half-hours (3 days, ${pts.length} pts) inside NDC +-0.92${w === 390 ? ", >= 16 px margin" : ""}`,
+    `max ${f(maxAbs, 3)}, edge margin ${f(px, 1)} px`, maxAbs <= 0.92 && (w !== 390 || px >= 16));
+}
+
 // (q) walls fill >= 30% of viewer height at 1280 (viewer 940x640)
 check("q", "camera 940x640: walls fill >= 30% of viewer height", `${f(100 * proj["940x640"].fill, 1)} %`, proj["940x640"].fill >= 0.3);
 
@@ -293,6 +307,36 @@ check("x", "easing 0 -> 0.5 m: mid-motion at 0.15 s, >= 95% at 0.4 s, exactly 0.
 // demand frameloop: the first frame after an idle spell carries the whole idle time as its delta; it must not jump
 const idle = V.easeDepth(0, 0.5, 5);
 check("x", "first frame after 5 s idle moves < 35% of the step (no jump)", `${f((100 * idle) / 0.5, 0)} %`, idle > 0 && idle < 0.35 * 0.5);
+
+// ---- Stage 3 fix 1: standards (docs/cloud-runner.md s6), compass label
+// (y) worked example from the cited source: Haurwitz (1945) clear-sky GHI = 1098 cos Z exp(-0.057 / cos Z), W/m2
+//     Z = 0 deg: 1098 exp(-0.057) = 1037.2; Z = 60 deg: 549 exp(-0.114) = 489.85. haurwitz() takes altitude = 90 - Z.
+const { haurwitz } = await import("../src/lib/patterns-3d/solar-budget-skin/engine.ts");
+const hz0 = haurwitz(90), hz60 = haurwitz(30);
+check("y", "Haurwitz (1945) GHI = 1098 cosZ exp(-0.057/cosZ): Z 0 -> 1037.2, Z 60 -> 489.8 W/m2 (+-0.1)", `${f(hz0, 1)} / ${f(hz60, 1)}`,
+  near(hz0, 1037.2, 0.1) && near(hz60, 489.85, 0.1));
+
+// (z) the UI's source line ("approximate, after <source>") states the source and the engine's own split and g-value
+const { BEAM_SHARE, DIFFUSE_SHARE, G_VALUE } = await import("../src/lib/patterns-3d/solar-budget-skin/engine.ts");
+const SRC = "approximate, after Haurwitz (1945) clear-sky global horizontal irradiance, 85% beam / 15% diffuse split, g = 0.6";
+check("z", "UI source line = required wording; split and g match the engine", `${V.SOURCE_NOTE} | engine ${BEAM_SHARE}/${DIFFUSE_SHARE}, g ${G_VALUE}`,
+  V.SOURCE_NOTE === SRC && BEAM_SHARE === 0.85 && DIFFUSE_SHARE === 0.15 && G_VALUE === 0.6);
+
+// (aa) N compass label clears both walls (screen bbox incl. 0.6 m blades) by >= 24 px at the default view, 1280 and 390
+for (const [w, h] of [[940, 640], [390, 464]]) {
+  const cam = new THREE.PerspectiveCamera(V.CAMERA.fov, w / h, 0.1, 500);
+  cam.position.set(...V.cameraPosition(w / h)); cam.lookAt(...V.CAMERA.target); cam.updateMatrixWorld();
+  const px = (p) => { const v = new THREE.Vector3(...p).project(cam); return [((v.x + 1) / 2) * w, ((1 - v.y) / 2) * h]; };
+  const n = px(V.COMPASS.N);
+  const gaps = V.WALL_X.map((cx) => {
+    const pts = [cx - V.CELL / 2, cx + V.CELL / 2].flatMap((x) => [0, V.WALL_H].flatMap((y) => [-0.07, 0.6].map((z) => px([x, y, z]))));
+    const [x0, x1] = [Math.min(...pts.map((p) => p[0])), Math.max(...pts.map((p) => p[0]))];
+    const [y0, y1] = [Math.min(...pts.map((p) => p[1])), Math.max(...pts.map((p) => p[1]))];
+    return Math.hypot(Math.max(x0 - n[0], 0, n[0] - x1), Math.max(y0 - n[1], 0, n[1] - y1));
+  });
+  check("aa", `N label ${w}x${h}: >= 24 px clear of both walls, inside the viewer`, `N at ${n.map((v) => f(v, 0)).join(",")}, gaps ${gaps.map((g) => f(g, 0)).join(" / ")} px`,
+    gaps.every((g) => g >= 24) && n[0] > 16 && n[0] < w - 16 && n[1] > 16 && n[1] < h - 16);
+}
 
 // ---- print
 const pad = (v, w) => String(v).padEnd(w);
