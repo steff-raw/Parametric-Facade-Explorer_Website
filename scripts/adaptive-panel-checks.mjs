@@ -1,4 +1,4 @@
-// Adaptive Panel, Stage 1 checks (P-0023).
+// Adaptive Panel, Stage 1 (engine) + Stage 2 (3D view module) checks (P-0023).
 // Run: node --experimental-strip-types --no-warnings scripts/adaptive-panel-checks.mjs
 import { register } from "node:module";
 
@@ -165,10 +165,72 @@ const o = sun(JUN, 12.5);
 check("o", "Jun 12:30: alt 60.9 +-0.2, vec (-0.120, 0.874, 0.472) +-0.005", `alt ${f(o.altitude, 2)} vec (${o.vec.map((v) => f(v, 3)).join(", ")})`,
   near(o.altitude, 60.9, 0.2) && near(o.vec[0], -0.12, 0.005) && near(o.vec[1], 0.874, 0.005) && near(o.vec[2], 0.472, 0.005));
 
+// ---- Stage 2: 3D view module (camera rule, scene layout, gallery card)
+const THREE = await import("three");
+const V = await import("../src/lib/patterns-3d/adaptive-panel/index.ts");
+
+// (p) camera rule (J2): 07:30-16:30 sun-up arc of all three days, sun sphere and both walls inside NDC +-0.92
+const arcPoints = DAY_MONTHS.flatMap((m) => V.scrubHours(m).map((h) => sun(m, h).vec.map((v) => v * V.ARC_RADIUS)));
+const wallPoints = V.WALL_X.flatMap((cx) =>
+  [cx - V.CELL / 2, cx + V.CELL / 2].flatMap((x) => [0, V.WALL_H].flatMap((y) => [-0.07, 0.6].map((z) => [x, y, z]))),
+);
+function project(w, h) {
+  const cam = new THREE.PerspectiveCamera(V.CAMERA.fov, w / h, 0.1, 500);
+  cam.position.set(...V.cameraPosition(w / h));
+  cam.lookAt(...V.CAMERA.target);
+  cam.updateMatrixWorld();
+  const right = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0);
+  const up = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 1);
+  const ndc = (p) => new THREE.Vector3(...p).project(cam);
+  const sunNdc = arcPoints.flatMap((p) =>
+    [right, up].flatMap((ax) => [1, -1].map((s) => ndc(new THREE.Vector3(...p).addScaledVector(ax, s * V.SUN_RADIUS).toArray()))),
+  );
+  const walls = wallPoints.map(ndc);
+  const all = [...sunNdc, ...walls];
+  const span = (arr, k) => [Math.min(...arr.map((v) => v[k])), Math.max(...arr.map((v) => v[k]))];
+  const [x0, x1] = span(all, "x"), [y0, y1] = span(all, "y");
+  const [wy0, wy1] = span(walls, "y");
+  return { x0, x1, y0, y1, maxAbs: Math.max(-x0, x1, -y0, y1), fill: (wy1 - wy0) / 2, D: cam.position.distanceTo(new THREE.Vector3(...V.CAMERA.target)) };
+}
+const viewers = [[940, 640], [940, 700], [390, 464], [360, 400]];
+const proj = {};
+for (const [w, h] of viewers) {
+  const r = (proj[`${w}x${h}`] = project(w, h));
+  check("p", `camera ${w}x${h}: arc (3 days) + sun sphere + walls inside NDC +-0.92`,
+    `D ${f(r.D, 1)} x ${f(r.x0)}..${f(r.x1)} y ${f(r.y0)}..${f(r.y1)}`, r.maxAbs <= 0.92);
+}
+
+// (q) walls fill >= 30% of viewer height at 1280 (viewer 940x640)
+check("q", "camera 940x640: walls fill >= 30% of viewer height", `${f(100 * proj["940x640"].fill, 1)} %`, proj["940x640"].fill >= 0.3);
+
+// (r) gallery module: meta, tags, params, thumbnail
+const svg = V.generatePreviewSvg();
+const sp = Object.fromEntries(V.meta.staticParams.map((d) => [d.key, d]));
+check("r", "module: slug, static-3d, tags Performance/Solar/Kinetic, params day/cap/staticDepth",
+  `${V.meta.slug} ${V.meta.type} [${V.meta.tags.join(", ")}] ${Object.keys(sp).join("/")}`,
+  V.meta.slug === "adaptive-panel" && V.meta.type === "static-3d" && V.meta.tags.join() === "Performance,Solar,Kinetic" &&
+  sp.day?.min === 0 && sp.day?.max === 2 && sp.cap?.min === 100 && sp.cap?.max === 300 && sp.cap?.step === 10 && sp.cap?.default === 150 &&
+  sp.staticDepth?.min === 0 && sp.staticDepth?.max === 0.6 && sp.staticDepth?.step === 0.1 && sp.staticDepth?.default === 0.3);
+check("r", "thumbnail: square svg, two facades + sun dot, no text", `${svg.length} chars, ${(svg.match(/<rect/g) ?? []).length} rects, circle ${svg.includes("<circle")}`,
+  svg.startsWith("<svg") && /viewBox="0 0 800 800"/.test(svg) && (svg.match(/<rect/g) ?? []).length === 10 && svg.includes("<circle") && !svg.includes("<text"));
+
+// (s) scrubber hours: sun-up hourly midpoints inside 07:30-16:30
+const sh = DAY_MONTHS.map((m) => V.scrubHours(m));
+check("s", "scrub hours: Jun 10 (07:30-16:30), Dec 8 (08:30-15:30), Mar 10", sh.map((s) => `${s.length} ${s[0]}-${s[s.length - 1]}`).join(" | "),
+  sh[0].length === 10 && sh[0][0] === 7.5 && sh[1].length === 8 && sh[1][0] === 8.5 && sh[1][7] === 15.5 && sh[2].length === 10);
+
+// (t) scene transforms: 10 glass + 10 blades, blade depth at true scale from the top of each cell
+const bl = (wall, row, d) => V.bladeTransform(wall, row, d);
+const t1 = bl(1, 4, 0.5), t0 = bl(0, 0, 0);
+check("t", "blade: depth 0.5 -> scale z 0.5, centre z 0.25, top at cell top; d = 0 hidden; 20 elements",
+  `z ${f(t1.scale[2])} cz ${f(t1.position[2])} top ${f(t1.position[1] + t1.scale[1] / 2)} | d0 scale ${t0.scale.join(",")} | n ${V.getElementCount()}`,
+  near(t1.scale[2], 0.5, 1e-9) && near(t1.position[2], 0.25, 1e-9) && near(t1.position[1] + t1.scale[1] / 2, 7.5, 1e-9) &&
+  t0.scale.every((v) => v === 0) && V.getElementCount() === 20 && near(V.glassTransform(0, 0).position[0], -1.5, 1e-9));
+
 // ---- print
 const pad = (v, w) => String(v).padEnd(w);
 const passed = rows.filter((x) => x.pass).length;
-console.log("Adaptive Panel, Stage 1 checks (P-0023)\n");
+console.log("Adaptive Panel, Stage 1 + 2 checks (P-0023)\n");
 console.log(`${pad("case", 5)}${pad("check", 80)}${pad("value", 62)}result`);
 console.log("-".repeat(153));
 for (const x of rows) console.log(`${pad(x.id, 5)}${pad(x.what, 80)}${pad(x.got, 62)}${x.pass ? "PASS" : "FAIL"}`);

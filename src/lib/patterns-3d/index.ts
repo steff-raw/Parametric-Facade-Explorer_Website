@@ -3,6 +3,7 @@ import * as radialPulse from "./radial-pulse-panels";
 import * as hingedFlapGrid from "./hinged-flap-grid";
 import * as rotatedBrickScreen from "./rotated-brick-screen";
 import * as solarBudgetSkin from "./solar-budget-skin";
+import * as adaptivePanel from "./adaptive-panel";
 import {
   KineticPatternModule,
   Static3DPatternModule,
@@ -17,6 +18,7 @@ export const static3dPatterns: Static3DPatternModule[] = [
   hingedFlapGrid.static3dModule,
   rotatedBrickScreen.static3dModule,
   solarBudgetSkin.static3dModule,
+  adaptivePanel.static3dModule,
 ];
 
 export function getKineticPattern(
