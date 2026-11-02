@@ -1,0 +1,364 @@
+// Adaptive Panel, Stage 1 (engine) + Stage 2 (3D view module) checks (P-0023).
+// Run: node --experimental-strip-types --no-warnings scripts/adaptive-panel-checks.mjs
+import { register } from "node:module";
+
+// The adaptive-panel engine imports the P-0014 engine without a file extension (Next/tsc style); let Node add ".ts".
+register(
+  "data:text/javascript," +
+    encodeURIComponent(
+      "export async function resolve(s, c, next) { try { return await next(s, c); } catch (e) { if (s.startsWith('.') && !/\\.[a-z]+$/.test(s)) return next(s + '.ts', c); throw e; } }",
+    ),
+  import.meta.url,
+);
+
+const { sunPosition, SAMPLE_DAY } = await import("../src/lib/patterns-3d/solar-budget-skin/engine.ts");
+const E = await import("../src/lib/patterns-3d/adaptive-panel/engine.ts");
+const { sun, svf, tauD, tauB, gain, kineticDepth, depthSeries, sunPath, dayResult, equalGainDepth, DAY_MONTHS, DEPTHS, CHART_HOURS, DEFAULTS } = E;
+
+const rows = [];
+const near = (v, want, tol) => Math.abs(v - want) <= tol;
+const check = (id, what, got, pass) => rows.push({ id, what, got, pass });
+const f = (v, n = 2) => Number(v).toFixed(n);
+const [JUN, DEC, MAR] = DAY_MONTHS;
+const NAMES = { [JUN]: "Jun", [DEC]: "Dec", [MAR]: "Mar" };
+const { cap: CAP, staticDepth: STATIC } = DEFAULTS;
+const sameDepth = (a, b) => Math.abs(a - b) < 1e-9;
+const inChart = (s) => s.hours.map((h, i) => [h, i]).filter(([h]) => h >= 7.5 && h <= 16.5);
+
+// (a) 21 Jun 12:30, open
+const a = gain(JUN, 12.5, 0);
+check("a", "21 Jun 12:30, d = 0: gain 288 +-1 W/m2", f(a, 1), near(a, 288, 1));
+
+// (b) open glass: tau_b 1, SVF 0.5, sky view 100
+const bVec = sun(JUN, 12.5).vec;
+const bSky = dayResult(JUN, CAP, 0).skyView.static;
+check("b", "d = 0: tau_b = 1, SVF = 0.5 +-0.01, sky view kept 100", `tau_b ${f(tauB(bVec, 0), 3)} SVF ${f(svf(0), 4)} sky ${f(bSky, 1)}`,
+  tauB(bVec, 0) === 1 && near(svf(0), 0.5, 0.01) && bSky === 100);
+
+// (c) gain non-increasing in d, every sun-up hour of the three days
+let cBad = 0, cN = 0;
+for (const m of DAY_MONTHS) {
+  for (const h of depthSeries(m, CAP, STATIC).hours) {
+    for (let i = 1; i < DEPTHS.length; i++) {
+      cN++;
+      if (gain(m, h, DEPTHS[i]) > gain(m, h, DEPTHS[i - 1]) + 1e-9) cBad++;
+    }
+  }
+}
+check("c", "gain non-increasing in d (all sun-up hours, 3 days, 0 to 0.6)", `${cN} steps, ${cBad} increases`, cBad === 0);
+
+// (d) prototype table
+const PROTO = {
+  [JUN]: { open: 1.9, stat: 1.14, kin: 1.21, moves: 6, glare: [6, 4] },
+  [DEC]: { open: 2.39, stat: 2.28, kin: 2.39, moves: 0, glare: [7, 7] },
+  [MAR]: { open: 3.16, stat: 2.68, kin: 3.16, moves: 0, glare: [8, 8] },
+};
+for (const m of DAY_MONTHS) {
+  const r = dayResult(m, CAP, STATIC);
+  const p = PROTO[m];
+  const ok = near(r.open, p.open, 0.05) && near(r.static, p.stat, 0.05) && near(r.kinetic, p.kin, 0.05) && r.moves === p.moves &&
+    (m !== JUN || (r.glare.static === 6 && r.glare.kinetic === 4));
+  check("d", `${NAMES[m]}: open/static/kinetic ${p.open}/${p.stat}/${p.kin} +-0.05, ${p.moves} moves${m === JUN ? ", glare 6/4" : ""}`,
+    `${f(r.open)}/${f(r.static)}/${f(r.kinetic)} kWh/m2, ${r.moves} moves${m === JUN ? `, glare ${r.glare.static}/${r.glare.kinetic}` : ""}`, ok);
+}
+
+// (e) June depth series, 07:30 to 16:30
+const JUNE = [0, 0, 0.2, 0.4, 0.5, 0.5, 0.4, 0.2, 0, 0];
+const eS = depthSeries(JUN, CAP, STATIC);
+const eK = inChart(eS).map(([, i]) => eS.kinetic[i]);
+check("e", "June kinetic depth 07:30-16:30 = 0 0 .2 .4 .5 .5 .4 .2 0 0", eK.join(" "),
+  eK.length === 10 && eK.every((d, i) => sameDepth(d, JUNE[i])));
+
+// (f) Dec / Mar kinetic open every sun-up hour
+for (const m of [DEC, MAR]) {
+  const s = depthSeries(m, CAP, STATIC);
+  check("f", `${NAMES[m]}: kinetic d = 0 every sun-up hour`, `${s.hours.length} h, max d ${f(Math.max(...s.kinetic), 1)}`,
+    s.kinetic.every((d) => d === 0));
+}
+
+// (g) cap honoured where the gate passes
+let gN = 0, gBad = 0;
+for (const cap of [100, 150, 200, 250, 300]) {
+  for (const m of DAY_MONTHS) {
+    const s = depthSeries(m, cap, STATIC);
+    s.hours.forEach((h, i) => {
+      if (kineticDepth(m, h, 1e9) === 0 && kineticDepth(m, h, 0) === 0) return; // gate closed: open by rule
+      gN++;
+      const d = s.kinetic[i];
+      if (!(gain(m, h, d) <= cap + 1e-9 || sameDepth(d, 0.6))) gBad++;
+    });
+  }
+}
+check("g", "gate-passed hours: gain <= cap or d = 0.6 (caps 100-300, 3 days)", `${gN} hours, ${gBad} breaches`, gN > 0 && gBad === 0);
+
+// (h) cap extremes
+const hHuge = DAY_MONTHS.map((m) => ({ s: depthSeries(m, 1e9, STATIC), r: dayResult(m, 1e9, STATIC) }));
+const hHugeOk = hHuge.every(({ s, r }) => s.kinetic.every((d) => d === 0) && r.moves === 0);
+const hZero = depthSeries(JUN, 0, STATIC);
+const hGatePassed = hZero.hours.filter((h) => {
+  const v = sun(JUN, h).vec;
+  return v[2] > 0 && Math.atan2(v[1], v[2]) * (180 / Math.PI) >= 45;
+});
+const hZeroOk = hGatePassed.length > 0 && hGatePassed.every((h) => sameDepth(hZero.kinetic[hZero.hours.indexOf(h)], 0.6)) &&
+  hZero.kinetic.every((d, i) => hGatePassed.includes(hZero.hours[i]) || d === 0);
+check("h", "cap 1e9: d = 0, moves 0 (3 days); cap 0, Jun: d = 0.6 where gate passes, else 0",
+  `huge ${hHugeOk ? "all open, 0 moves" : "FAIL"}; cap 0: ${hGatePassed.length} gate h, ${hZero.kinetic.filter((d) => sameDepth(d, 0.6)).length} at 0.6, rest 0`, hHugeOk && hZeroOk);
+
+// (i) equal-gain static depth reproduces kinetic heat
+for (const m of DAY_MONTHS) {
+  const d = equalGainDepth(m, CAP);
+  const k = dayResult(m, CAP, STATIC).kinetic;
+  const s = dayResult(m, CAP, d).static;
+  check("i", `${NAMES[m]}: equal-gain static depth gives kinetic heat +-1%`, `d ${f(d, 3)} m: static ${f(s, 3)} vs kinetic ${f(k, 3)}`,
+    Math.abs(s - k) <= 0.01 * k);
+}
+
+// (j) diffuse factor
+check("j", "tau_d(0.3) = 0.82 +-0.02, tau_d(0.6) = 0.68 +-0.02", `${f(tauD(0.3), 3)} / ${f(tauD(0.6), 3)}`,
+  near(tauD(0.3), 0.82, 0.02) && near(tauD(0.6), 0.68, 0.02));
+
+// (k) no NaN at night, lat 0, lat 70
+const finite = (x) => (typeof x === "number" ? Number.isFinite(x) : Array.isArray(x) ? x.every(finite) : Object.values(x).every(finite));
+let kBad = 0, kN = 0;
+for (const lat of [0, 52, 70]) {
+  for (const m of DAY_MONTHS) {
+    const vals = [gain(m, 0.5, 0, lat), gain(m, 0.5, 0.6, lat), kineticDepth(m, 0.5, CAP, lat), depthSeries(m, CAP, STATIC, lat),
+      dayResult(m, CAP, STATIC, lat), equalGainDepth(m, CAP, lat), sunPath(m, lat)];
+    kN += vals.length;
+    kBad += vals.filter((v) => !finite(v)).length;
+  }
+}
+check("k", "no NaN: 00:30, lat 0 / 52 / 70, 3 days, all functions", `${kN} results, ${kBad} non-finite`, kBad === 0);
+
+// (l) sunPath
+for (const m of DAY_MONTHS) {
+  const p = sunPath(m);
+  let want = 0;
+  for (let k = 0; k < 48; k++) if (sunPosition(52, SAMPLE_DAY[m], k / 2).altitude > 0) want++;
+  const unit = p.every(({ vec }) => near(Math.hypot(...vec), 1, 0.001));
+  check("l", `${NAMES[m]} sunPath: y > 0, unit +-0.001, count = sun-up half-hours`, `${p.length} points (want ${want}), min y ${f(Math.min(...p.map((x) => x.vec[1])), 3)}`,
+    p.length === want && p.every(({ vec }) => vec[1] > 0) && unit);
+}
+
+// (m) depthSeries = prototype series
+for (const m of DAY_MONTHS) {
+  const s = depthSeries(m, CAP, STATIC);
+  const win = inChart(s);
+  const k = win.map(([, i]) => s.kinetic[i]);
+  const outside = s.kinetic.filter((d, i) => !win.some(([, j]) => j === i));
+  // Jun: the 10 prototype hours; Dec / Mar: open at every sun-up hour inside the window (Dec has only 08:30 to 15:30)
+  const kOk = m === JUN ? k.length === 10 && k.every((d, i) => sameDepth(d, JUNE[i])) : k.length > 0 && k.every((d) => d === 0);
+  const ok = kOk && outside.every((d) => d === 0) &&
+    s.static.every((d) => d === STATIC) && s.static.length === s.hours.length && s.kinetic.length === s.hours.length;
+  check("m", `${NAMES[m]} depthSeries: kinetic = prototype, 0 outside 07:30-16:30, static 0.3`, `kinetic ${k.join(" ")} | static ${STATIC} x ${s.static.length}`, ok);
+}
+
+// (n) glare hours
+for (const m of DAY_MONTHS) {
+  const r = dayResult(m, CAP, STATIC);
+  const [ws, wk] = PROTO[m].glare;
+  check("n", `${NAMES[m]} glare h static / kinetic = ${ws} / ${wk}`, `${r.glare.static} / ${r.glare.kinetic}`, r.glare.static === ws && r.glare.kinetic === wk);
+}
+
+// (o) 12:30 June sun
+const o = sun(JUN, 12.5);
+check("o", "Jun 12:30: alt 60.9 +-0.2, vec (-0.120, 0.874, 0.472) +-0.005", `alt ${f(o.altitude, 2)} vec (${o.vec.map((v) => f(v, 3)).join(", ")})`,
+  near(o.altitude, 60.9, 0.2) && near(o.vec[0], -0.12, 0.005) && near(o.vec[1], 0.874, 0.005) && near(o.vec[2], 0.472, 0.005));
+
+// ---- Stage 2: 3D view module (camera rule, scene layout, gallery card)
+const THREE = await import("three");
+const V = await import("../src/lib/patterns-3d/adaptive-panel/index.ts");
+
+// (p) camera rule (J2): 07:30-16:30 sun-up arc of all three days, sun sphere and both walls inside NDC +-0.92
+const arcPoints = DAY_MONTHS.flatMap((m) => V.scrubHours(m).map((h) => sun(m, h).vec.map((v) => v * V.ARC_RADIUS)));
+const wallPoints = V.WALL_X.flatMap((cx) =>
+  [cx - V.CELL / 2, cx + V.CELL / 2].flatMap((x) => [0, V.WALL_H].flatMap((y) => [-0.07, 0.6].map((z) => [x, y, z]))),
+);
+function project(w, h) {
+  const cam = new THREE.PerspectiveCamera(V.CAMERA.fov, w / h, 0.1, 500);
+  cam.position.set(...V.cameraPosition(w / h));
+  cam.lookAt(...V.CAMERA.target);
+  cam.updateMatrixWorld();
+  const right = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0);
+  const up = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 1);
+  const ndc = (p) => new THREE.Vector3(...p).project(cam);
+  const sunNdc = arcPoints.flatMap((p) =>
+    [right, up].flatMap((ax) => [1, -1].map((s) => ndc(new THREE.Vector3(...p).addScaledVector(ax, s * V.SUN_RADIUS).toArray()))),
+  );
+  const walls = wallPoints.map(ndc);
+  const all = [...sunNdc, ...walls];
+  const span = (arr, k) => [Math.min(...arr.map((v) => v[k])), Math.max(...arr.map((v) => v[k]))];
+  const [x0, x1] = span(all, "x"), [y0, y1] = span(all, "y");
+  const [wy0, wy1] = span(walls, "y");
+  return { x0, x1, y0, y1, maxAbs: Math.max(-x0, x1, -y0, y1), fill: (wy1 - wy0) / 2, D: cam.position.distanceTo(new THREE.Vector3(...V.CAMERA.target)) };
+}
+const viewers = [[940, 640], [940, 700], [390, 464], [360, 400]];
+const proj = {};
+for (const [w, h] of viewers) {
+  const r = (proj[`${w}x${h}`] = project(w, h));
+  check("p", `camera ${w}x${h}: arc (3 days) + sun sphere + walls inside NDC +-0.92`,
+    `D ${f(r.D, 1)} x ${f(r.x0)}..${f(r.x1)} y ${f(r.y0)}..${f(r.y1)}`, r.maxAbs <= 0.92);
+}
+
+// (p) the DRAWN arc (every sun-up half-hour, incl. the dim tails behind the facade) inside NDC +-0.92, and >= 16 px
+// from the viewer edges at 390x464 (ui-spec margin)
+for (const [w, h] of [[940, 640], [390, 464]]) {
+  const cam = new THREE.PerspectiveCamera(V.CAMERA.fov, w / h, 0.1, 500);
+  cam.position.set(...V.cameraPosition(w / h));
+  cam.lookAt(...V.CAMERA.target);
+  cam.updateMatrixWorld();
+  const pts = DAY_MONTHS.flatMap((m) => sunPath(m).map(({ vec }) => new THREE.Vector3(...vec.map((v) => v * V.ARC_RADIUS)).project(cam)));
+  const maxAbs = Math.max(...pts.flatMap((v) => [Math.abs(v.x), Math.abs(v.y)]));
+  const px = Math.min(...pts.flatMap((v) => [((1 - Math.abs(v.x)) / 2) * w, ((1 - Math.abs(v.y)) / 2) * h]));
+  check("p", `drawn arc ${w}x${h}: all sun-up half-hours (3 days, ${pts.length} pts) inside NDC +-0.92${w === 390 ? ", >= 16 px margin" : ""}`,
+    `max ${f(maxAbs, 3)}, edge margin ${f(px, 1)} px`, maxAbs <= 0.92 && (w !== 390 || px >= 16));
+}
+
+// (q) walls fill >= 30% of viewer height at 1280 (viewer 940x640)
+check("q", "camera 940x640: walls fill >= 30% of viewer height", `${f(100 * proj["940x640"].fill, 1)} %`, proj["940x640"].fill >= 0.3);
+
+// (r) gallery module: meta, tags, params, thumbnail
+const svg = V.generatePreviewSvg();
+const sp = Object.fromEntries(V.meta.staticParams.map((d) => [d.key, d]));
+check("r", "module: slug, static-3d, tags Performance/Solar/Kinetic, params day/cap/staticDepth",
+  `${V.meta.slug} ${V.meta.type} [${V.meta.tags.join(", ")}] ${Object.keys(sp).join("/")}`,
+  V.meta.slug === "adaptive-panel" && V.meta.type === "static-3d" && V.meta.tags.join() === "Performance,Solar,Kinetic" &&
+  sp.day?.min === 0 && sp.day?.max === 2 && sp.cap?.min === 100 && sp.cap?.max === 300 && sp.cap?.step === 10 && sp.cap?.default === 150 &&
+  sp.staticDepth?.min === 0 && sp.staticDepth?.max === 0.6 && sp.staticDepth?.step === 0.1 && sp.staticDepth?.default === 0.3);
+check("r", "thumbnail: square svg, two facades + sun dot, no text", `${svg.length} chars, ${(svg.match(/<rect/g) ?? []).length} rects, circle ${svg.includes("<circle")}`,
+  svg.startsWith("<svg") && /viewBox="0 0 800 800"/.test(svg) && (svg.match(/<rect/g) ?? []).length === 10 && svg.includes("<circle") && !svg.includes("<text"));
+
+// (s) scrubber hours: sun-up hourly midpoints inside 07:30-16:30
+const sh = DAY_MONTHS.map((m) => V.scrubHours(m));
+check("s", "scrub hours: Jun 10 (07:30-16:30), Dec 8 (08:30-15:30), Mar 10", sh.map((s) => `${s.length} ${s[0]}-${s[s.length - 1]}`).join(" | "),
+  sh[0].length === 10 && sh[0][0] === 7.5 && sh[1].length === 8 && sh[1][0] === 8.5 && sh[1][7] === 15.5 && sh[2].length === 10);
+
+// (t) scene transforms: 10 glass + 10 blades, blade depth at true scale from the top of each cell
+const bl = (wall, row, d) => V.bladeTransform(wall, row, d);
+const t1 = bl(1, 4, 0.5), t0 = bl(0, 0, 0);
+check("t", "blade: depth 0.5 -> scale z 0.5, centre z 0.25, top at cell top; d = 0 hidden; 20 elements",
+  `z ${f(t1.scale[2])} cz ${f(t1.position[2])} top ${f(t1.position[1] + t1.scale[1] / 2)} | d0 scale ${t0.scale.join(",")} | n ${V.getElementCount()}`,
+  near(t1.scale[2], 0.5, 1e-9) && near(t1.position[2], 0.25, 1e-9) && near(t1.position[1] + t1.scale[1] / 2, 7.5, 1e-9) &&
+  t0.scale.every((v) => v === 0) && V.getElementCount() === 20 && near(V.glassTransform(0, 0).position[0], -1.5, 1e-9));
+
+// ---- Stage 3: interaction helpers (play, drag snap, focus framing, blade easing)
+// (u) play loops through the day's scrub hours and wraps back to the first
+const junH = V.scrubHours(JUN), decH = V.scrubHours(DEC);
+const playSeq = [];
+for (let h = junH[0], i = 0; i < 11; i++, h = V.nextHour(junH, h)) playSeq.push(h);
+check("u", "play: Jun 07:30 -> 16:30 then wraps to 07:30; Dec 15:30 -> 08:30",
+  `${playSeq.map(V.fmtHour).join(" ")} | Dec ${V.fmtHour(V.nextHour(decH, 15.5))}`,
+  playSeq.slice(0, 10).every((h, i) => h === junH[i]) && playSeq[10] === 7.5 && V.nextHour(decH, 15.5) === 8.5);
+
+// (v) drag snap: pointer on (or 30 px past) each tick's screen point snaps to that hour, at 390x464 and 940x640, all days
+function screenTicks(w, h, m, cam) {
+  return V.scrubHours(m).map((hr) => {
+    const p = new THREE.Vector3(...sun(m, hr).vec.map((v) => v * V.ARC_RADIUS)).project(cam);
+    return [((p.x + 1) / 2) * w, ((1 - p.y) / 2) * h];
+  });
+}
+let vBad = 0, vN = 0;
+const vEnds = [];
+for (const [w, h] of [[390, 464], [940, 640]]) {
+  const cam = new THREE.PerspectiveCamera(V.CAMERA.fov, w / h, 0.1, 500);
+  cam.position.set(...V.cameraPosition(w / h));
+  cam.lookAt(...V.CAMERA.target);
+  cam.updateMatrixWorld();
+  for (const m of DAY_MONTHS) {
+    const pts = screenTicks(w, h, m, cam);
+    pts.forEach((p, i) => { vN++; if (V.nearestIndex(pts, p) !== i) vBad++; });
+    const n = pts.length;
+    if (w === 390) vEnds.push(`${NAMES[m]} ${f(pts[0][0], 0)},${f(pts[0][1], 0)}..${f(pts[n - 1][0], 0)},${f(pts[n - 1][1], 0)}`);
+  }
+}
+check("v", "drag snap: pointer on each hour tick snaps to that hour (390x464, 940x640, 3 days)", `${vN} probes, ${vBad} wrong`, vBad === 0);
+check("v", "drag ends at 390x464 inside the viewer (16 px margin)", vEnds.join(" | "),
+  vEnds.length === 3 && DAY_MONTHS.every((m) => {
+    const cam = new THREE.PerspectiveCamera(V.CAMERA.fov, 390 / 464, 0.1, 500);
+    cam.position.set(...V.cameraPosition(390 / 464)); cam.lookAt(...V.CAMERA.target); cam.updateMatrixWorld();
+    return screenTicks(390, 464, m, cam).every(([x, y]) => x >= 16 && x <= 374 && y >= 16 && y <= 448);
+  }));
+check("v", "sun hit target radius >= 22 px (44 px ring)", `${V.SUN_HIT_PX} px`, V.SUN_HIT_PX >= 22);
+
+// (w) focus framing: target on the clicked wall; that wall inside NDC +-0.92 and >= 50% of viewer height; overview = camera rule
+for (const [w, h] of [[940, 640], [390, 464]]) {
+  const res = [];
+  for (const [wall, name] of [[0, "static"], [1, "kinetic"]]) {
+    const fv = V.focusView(name, w / h);
+    const cam = new THREE.PerspectiveCamera(V.CAMERA.fov, w / h, 0.1, 500);
+    cam.position.set(...fv.position); cam.lookAt(...fv.target); cam.updateMatrixWorld();
+    const cx = V.WALL_X[wall];
+    const pts = [cx - V.CELL / 2, cx + V.CELL / 2].flatMap((x) => [0, V.WALL_H].flatMap((y) => [-0.07, 0.6].map((z) => new THREE.Vector3(x, y, z).project(cam))));
+    const maxAbs = Math.max(...pts.flatMap((p) => [Math.abs(p.x), Math.abs(p.y)]));
+    const fill = (Math.max(...pts.map((p) => p.y)) - Math.min(...pts.map((p) => p.y))) / 2;
+    const d = Math.hypot(...fv.position.map((v, i) => v - fv.target[i]));
+    res.push({ name, ok: fv.target[0] === cx && maxAbs <= 0.92 && fill >= 0.5 && d >= V.CAMERA.minDistance, txt: `${name} max ${f(maxAbs)} fill ${f(100 * fill, 0)}% D ${f(d, 1)}` });
+  }
+  const ov = V.focusView("overview", w / h);
+  const ovOk = ov.position.every((v, i) => near(v, V.cameraPosition(w / h)[i], 1e-9)) && ov.target.every((v, i) => v === V.CAMERA.target[i]);
+  check("w", `focus ${w}x${h}: wall framed (NDC <= 0.92, fill >= 50%), overview = camera rule`, `${res.map((r) => r.txt).join(" | ")} | overview ${ovOk}`, res.every((r) => r.ok) && ovOk);
+}
+
+// (x) blade easing: about 0.4 s, mid-motion after 0.15 s, settled (exact) by 0.7 s; 60 fps steps
+const ease = (from, to, secs) => { let d = from; for (let t = 0; t < secs - 1e-9; t += 1 / 60) d = V.easeDepth(d, to, 1 / 60); return d; };
+const x15 = ease(0, 0.5, 0.15), x40 = ease(0, 0.5, 0.4), x70 = ease(0, 0.5, 0.7);
+check("x", "easing 0 -> 0.5 m: mid-motion at 0.15 s, >= 95% at 0.4 s, exactly 0.5 by 0.7 s", `${f(x15, 3)} / ${f(x40, 3)} / ${f(x70, 3)}`,
+  x15 > 0.1 && x15 < 0.45 && x40 >= 0.475 && x70 === 0.5 && V.easeDepth(0.3, 0.3, 1 / 60) === 0.3);
+// demand frameloop: the first frame after an idle spell carries the whole idle time as its delta; it must not jump
+const idle = V.easeDepth(0, 0.5, 5);
+check("x", "first frame after 5 s idle moves < 35% of the step (no jump)", `${f((100 * idle) / 0.5, 0)} %`, idle > 0 && idle < 0.35 * 0.5);
+
+// ---- Stage 3 fix 1: standards (docs/cloud-runner.md s6), compass label
+// (y) worked example from the cited source: Haurwitz (1945) clear-sky GHI = 1098 cos Z exp(-0.057 / cos Z), W/m2
+//     Z = 0 deg: 1098 exp(-0.057) = 1037.2; Z = 60 deg: 549 exp(-0.114) = 489.85. haurwitz() takes altitude = 90 - Z.
+const { haurwitz } = await import("../src/lib/patterns-3d/solar-budget-skin/engine.ts");
+const hz0 = haurwitz(90), hz60 = haurwitz(30);
+check("y", "Haurwitz (1945) GHI = 1098 cosZ exp(-0.057/cosZ): Z 0 -> 1037.2, Z 60 -> 489.8 W/m2 (+-0.1)", `${f(hz0, 1)} / ${f(hz60, 1)}`,
+  near(hz0, 1037.2, 0.1) && near(hz60, 489.85, 0.1));
+
+// (z) the UI's source line ("approximate, after <source>") states the source and the engine's own split and g-value
+const { BEAM_SHARE, DIFFUSE_SHARE, G_VALUE } = await import("../src/lib/patterns-3d/solar-budget-skin/engine.ts");
+const SRC = "approximate, after Haurwitz (1945) clear-sky global horizontal irradiance, 85% beam / 15% diffuse split, g = 0.6";
+check("z", "UI source line = required wording; split and g match the engine", `${V.SOURCE_NOTE} | engine ${BEAM_SHARE}/${DIFFUSE_SHARE}, g ${G_VALUE}`,
+  V.SOURCE_NOTE === SRC && BEAM_SHARE === 0.85 && DIFFUSE_SHARE === 0.15 && G_VALUE === 0.6);
+
+// (aa) N compass label clears both walls (screen bbox incl. 0.6 m blades) by >= 24 px at the default view, 1280 and 390
+for (const [w, h] of [[940, 640], [390, 464]]) {
+  const cam = new THREE.PerspectiveCamera(V.CAMERA.fov, w / h, 0.1, 500);
+  cam.position.set(...V.cameraPosition(w / h)); cam.lookAt(...V.CAMERA.target); cam.updateMatrixWorld();
+  const px = (p) => { const v = new THREE.Vector3(...p).project(cam); return [((v.x + 1) / 2) * w, ((1 - v.y) / 2) * h]; };
+  const n = px(V.COMPASS.N);
+  const gaps = V.WALL_X.map((cx) => {
+    const pts = [cx - V.CELL / 2, cx + V.CELL / 2].flatMap((x) => [0, V.WALL_H].flatMap((y) => [-0.07, 0.6].map((z) => px([x, y, z]))));
+    const [x0, x1] = [Math.min(...pts.map((p) => p[0])), Math.max(...pts.map((p) => p[0]))];
+    const [y0, y1] = [Math.min(...pts.map((p) => p[1])), Math.max(...pts.map((p) => p[1]))];
+    return Math.hypot(Math.max(x0 - n[0], 0, n[0] - x1), Math.max(y0 - n[1], 0, n[1] - y1));
+  });
+  check("aa", `N label ${w}x${h}: >= 24 px clear of both walls, inside the viewer`, `N at ${n.map((v) => f(v, 0)).join(",")}, gaps ${gaps.map((g) => f(g, 0)).join(" / ")} px`,
+    gaps.every((g) => g >= 24) && n[0] > 16 && n[0] < w - 16 && n[1] > 16 && n[1] < h - 16);
+}
+
+// ---- print
+const pad = (v, w) => String(v).padEnd(w);
+const passed = rows.filter((x) => x.pass).length;
+console.log("Adaptive Panel, Stage 1 + 2 + 3 checks (P-0023)\n");
+console.log(`${pad("case", 5)}${pad("check", 80)}${pad("value", 62)}result`);
+console.log("-".repeat(153));
+for (const x of rows) console.log(`${pad(x.id, 5)}${pad(x.what, 80)}${pad(x.got, 62)}${x.pass ? "PASS" : "FAIL"}`);
+console.log(`\n${passed}/${rows.length} pass`);
+
+console.log("\nPrototype at defaults (cap 150, gate 45, static 0.3 m; kWh/m2 of glass, all sun-up hours)");
+console.log(`  ${pad("day", 5)}${pad("open", 7)}${pad("static", 8)}${pad("kinetic", 9)}${pad("k - s", 16)}${pad("moves", 7)}${pad("glare s/k", 11)}${pad("sky view s/k", 14)}equal-gain d`);
+for (const m of DAY_MONTHS) {
+  const r = dayResult(m, CAP, STATIC);
+  const diff = r.kinetic - r.static;
+  console.log(`  ${pad(NAMES[m], 5)}${pad(f(r.open), 7)}${pad(f(r.static), 8)}${pad(f(r.kinetic), 9)}${pad(`${diff >= 0 ? "+" : ""}${f(diff)} (${f((100 * diff) / r.static, 0)}%)`, 16)}${pad(r.moves, 7)}${pad(`${r.glare.static} / ${r.glare.kinetic}`, 11)}${pad(`${f(r.skyView.static, 0)} / ${f(r.skyView.kinetic, 0)}`, 14)}${f(equalGainDepth(m, CAP), 3)} m`);
+}
+console.log("\nJune by hour (W/m2 of glass)");
+console.log(`  ${pad("", 10)}${CHART_HOURS.map((h) => pad(`${String(Math.floor(h)).padStart(2, "0")}:30`, 7)).join("")}`);
+console.log(`  ${pad("depth m", 10)}${CHART_HOURS.map((h) => pad(f(kineticDepth(JUN, h, CAP), 1), 7)).join("")}`);
+console.log(`  ${pad("kinetic", 10)}${CHART_HOURS.map((h) => pad(f(gain(JUN, h, kineticDepth(JUN, h, CAP)), 1), 7)).join("")}`);
+console.log(`  ${pad("static .3", 10)}${CHART_HOURS.map((h) => pad(f(gain(JUN, h, STATIC), 1), 7)).join("")}`);
+console.log(`  ${pad("open", 10)}${CHART_HOURS.map((h) => pad(f(gain(JUN, h, 0), 1), 7)).join("")}`);
+
+process.exitCode = passed === rows.length ? 0 : 1;

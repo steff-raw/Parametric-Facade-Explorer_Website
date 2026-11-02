@@ -42,6 +42,11 @@ const Pattern3DCanvas = dynamic(() => import("./Pattern3DCanvas"), {
   loading: () => loading3d,
 });
 
+const AdaptivePanel = dynamic(() => import("./AdaptivePanel"), {
+  ssr: false,
+  loading: () => loading3d,
+});
+
 interface PatternDetailProps {
   slug: string;
 }
@@ -64,6 +69,8 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
   const isSolar = slug === "solar-budget-skin";
   const isYield = slug === "facade-yield-map";
   const isCavity = slug === "stack-effect-cavity";
+  const isAdaptive = slug === "adaptive-panel";
+  const [resetViewKey, setResetViewKey] = useState(0);
   const growsWithContent = isYield || isCavity;
   const [controlsOpen, setControlsOpen] = useState(false); // phone only, solar, yield and cavity slugs
   const phoneToggle = isSolar || growsWithContent;
@@ -174,6 +181,8 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
       playing={playing}
       onStats={handleStats}
     />
+  ) : isAdaptive ? (
+    <AdaptivePanel params={staticParams} onChange={onChange} resetViewKey={resetViewKey} />
   ) : isStatic3D && static3d ? (
     <Pattern3DCanvas
       pattern={static3d}
@@ -198,7 +207,9 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
           the yield map grows with its content; other patterns stack their controls under the viewer below sm. */}
       <section
         className={
-          isSolar
+          isAdaptive
+            ? "relative w-full bg-canvas"
+            : isSolar
             ? "relative h-[80vh] min-h-[480px] w-full overflow-hidden bg-canvas"
             : growsWithContent
               ? "relative min-h-[80vh] w-full overflow-hidden bg-canvas"
@@ -207,7 +218,9 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
       >
         <div
           className={
-            growsWithContent
+            isAdaptive
+              ? "relative w-full"
+              : growsWithContent
               ? "relative max-sm:pt-12 sm:mr-[min(340px,38vw)]"
               : isSolar
               ? "absolute inset-y-0 left-0 right-0 sm:right-[min(340px,38vw)]"
@@ -268,6 +281,16 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
                   <IconImage />
                   <span className="sr-only sm:not-sr-only">PNG</span>
                 </button>
+                {isAdaptive && (
+                  <button
+                    type="button"
+                    onClick={() => setResetViewKey((k) => k + 1)}
+                    className="inline-flex items-center gap-1.5 text-sm transition-colors hover:text-accent"
+                    title="Reset the 3D view"
+                  >
+                    ⟲ Reset view
+                  </button>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-3 text-sm text-ink">
@@ -299,6 +322,7 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
         </div>
 
         {/* Floating controls panel */}
+        {!isAdaptive && (
         <aside
           className={
             isSolar
@@ -436,6 +460,7 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
             </div>
           </div>
         </aside>
+        )}
       </section>
       {isSolar && <SolarFootnote params={staticParams} />}
 
