@@ -1,0 +1,28 @@
+# Checks every pull request into main (and main itself). Branch protection on main
+# requires the "checks" job, so nothing reaches production without it.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsc --noEmit
+      - run: npm run test:studio
+      - run: npm run test:storage
+      - name: Pattern checks
+        run: for f in scripts/*-checks.mjs; do node --experimental-strip-types --no-warnings "$f" || exit 1; done
+      - run: npm run build
