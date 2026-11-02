@@ -6,11 +6,11 @@
  * chart marker and the scene share one value. Params (day, cap, staticDepth) stay in PatternDetail state.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { PatternParams } from "@/lib/patterns";
 import { CHART_HOURS, dayResult, depthSeries, gain } from "@/lib/patterns-3d/adaptive-panel/engine";
-import { DAY_LABELS, fmtHour, generatePreviewSvg, meta, readParams, scrubHours } from "@/lib/patterns-3d/adaptive-panel";
+import { DAY_LABELS, fmtHour, generatePreviewSvg, meta, nextHour, readParams, scrubHours, type Focus } from "@/lib/patterns-3d/adaptive-panel";
 import { addVariation } from "@/lib/storage";
 import Slider from "./Slider";
 import TagPill from "./TagPill";
@@ -25,6 +25,10 @@ const GREY = "#969696";
 const heading = "text-[11px] font-medium uppercase tracking-tag text-muted";
 const f2 = (v: number) => v.toFixed(2);
 const signed = (v: number, n = 2) => `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(n)}`;
+/** The day's scrubber hour nearest to h (21 Dec has no 07:30 or 16:30 sun). */
+const snap = (hours: number[], h: number) => hours.reduce((a, b) => (Math.abs(b - h) < Math.abs(a - h) ? b : a), hours[0]);
+/** Play: one hour per second. */
+const PLAY_MS = 1000;
 
 interface AdaptivePanelProps {
   params: PatternParams;
@@ -46,7 +50,7 @@ function Chip({ label, a, b }: { label: string; a: string; b: string }) {
 }
 
 /** Gain through glass by hour: open (dashed), static (grey), kinetic (white), cap line and hour marker. */
-function GainChart({ rows, cap, hour }: { rows: { h: number; open: number; st: number; kin: number }[]; cap: number; hour: number }) {
+function GainChart({ rows, cap, hour, focus }: { rows: { h: number; open: number; st: number; kin: number }[]; cap: number; hour: number; focus: Focus }) {
   const W = 300, H = 130, L = 16, R = 284, TOP = 8, BOT = 108;
   const yMax = Math.max(cap, ...rows.map((r) => r.open)) * 1.1;
   const x = (h: number) => L + ((h - CHART_HOURS[0]) / (CHART_HOURS[CHART_HOURS.length - 1] - CHART_HOURS[0])) * (R - L);
@@ -59,8 +63,8 @@ function GainChart({ rows, cap, hour }: { rows: { h: number; open: number; st: n
         <line x1={L} x2={R} y1={y(cap)} y2={y(cap)} stroke={GREY} strokeWidth="1" strokeDasharray="1 3" />
         <text x={R} y={y(cap) - 4} fontSize="9" fill={GREY} textAnchor="end">cap {cap}</text>
         <polyline points={line("open")} fill="none" stroke={HEAT} strokeWidth="1.25" strokeDasharray="4 3" />
-        <polyline points={line("st")} fill="none" stroke={GREY} strokeWidth="1.5" />
-        <polyline points={line("kin")} fill="none" stroke="#e8e8e8" strokeWidth="2" />
+        <polyline points={line("st")} fill="none" stroke={GREY} strokeWidth={focus === "static" ? 3 : 1.5} opacity={focus === "kinetic" ? 0.35 : 1} data-testid="curve-static" />
+        <polyline points={line("kin")} fill="none" stroke="#e8e8e8" strokeWidth={focus === "kinetic" ? 3 : 2} opacity={focus === "static" ? 0.35 : 1} data-testid="curve-kinetic" />
         {now && (
           <>
             <line x1={x(hour)} x2={x(hour)} y1={TOP} y2={BOT} stroke={HEAT} strokeWidth="1" />
@@ -84,12 +88,31 @@ function GainChart({ rows, cap, hour }: { rows: { h: number; open: number; st: n
 export default function AdaptivePanel({ params, onChange, resetViewKey }: AdaptivePanelProps) {
   const { day, month, cap, staticDepth } = readParams(params);
   const [hourPick, setHourPick] = useState(12.5);
+  const [playing, setPlaying] = useState(false);
+  const [focus, setFocus] = useState<Focus>("overview");
   const [open, setOpen] = useState(false); // phone only
   const [saved, setSaved] = useState(false);
 
   const hours = useMemo(() => scrubHours(month), [month]);
   // The day's nearest scrubber hour (21 Dec has no 07:30 or 16:30 sun).
-  const hour = hours.reduce((a, b) => (Math.abs(b - hourPick) < Math.abs(a - hourPick) ? b : a), hours[0]);
+  const hour = snap(hours, hourPick);
+
+  // Play loops 07:30 to 16:30; scrubbing, dragging the sun or touching a control pauses it.
+  useEffect(() => {
+    if (!playing) return;
+    const id = window.setInterval(() => setHourPick((h) => nextHour(hours, snap(hours, h))), PLAY_MS);
+    return () => window.clearInterval(id);
+  }, [playing, hours]);
+  const pick = (h: number) => {
+    setPlaying(false);
+    setHourPick(h);
+  };
+  const change = (key: string, value: number) => {
+    setPlaying(false);
+    onChange(key, value);
+  };
+  // "Reset view" in the title chrome also leaves focus.
+  useEffect(() => setFocus("overview"), [resetViewKey]);
   const series = useMemo(() => depthSeries(month, cap, staticDepth), [month, cap, staticDepth]);
   const kinAt = (h: number) => series.kinetic[series.hours.indexOf(h)];
   const res = useMemo(() => dayResult(month, cap, staticDepth), [month, cap, staticDepth]);
@@ -119,7 +142,16 @@ export default function AdaptivePanel({ params, onChange, resetViewKey }: Adapti
 
   const scrubIdx = hours.indexOf(hour);
   const scrubber = (
-    <div className="pointer-events-auto">
+    <div className="pointer-events-auto flex items-start gap-3">
+      <button
+        type="button"
+        onClick={() => setPlaying((p) => !p)}
+        className="-my-3 min-h-[44px] shrink-0 text-sm text-ink underline underline-offset-4 transition-colors hover:text-accent"
+        aria-pressed={playing}
+      >
+        {playing ? "❚❚ Pause" : "▶ Play"}
+      </button>
+      <div className="min-w-0 flex-1">
       <input
         type="range"
         className="pfe-slider"
@@ -127,7 +159,9 @@ export default function AdaptivePanel({ params, onChange, resetViewKey }: Adapti
         max={hours.length - 1}
         step={1}
         value={scrubIdx}
-        onChange={(e) => setHourPick(hours[Number(e.target.value)])}
+        onChange={(e) => pick(hours[Number(e.target.value)])}
+        onPointerDown={() => setPlaying(false)}
+        onKeyDown={() => setPlaying(false)}
         aria-label="Hour (solar time)"
         aria-valuetext={`${fmtHour(hour)} solar`}
       />
@@ -135,6 +169,7 @@ export default function AdaptivePanel({ params, onChange, resetViewKey }: Adapti
         <span>{fmtHour(hours[0])}</span>
         <span className="text-ink">{fmtHour(hour)} solar</span>
         <span>{fmtHour(hours[hours.length - 1])}</span>
+      </div>
       </div>
     </div>
   );
@@ -163,9 +198,12 @@ export default function AdaptivePanel({ params, onChange, resetViewKey }: Adapti
             cap={cap}
             resetViewKey={resetViewKey}
             fallbackSvg={thumb}
+            focus={focus}
+            onFocus={setFocus}
+            onScrub={pick}
           />
           <div className="pointer-events-none absolute right-5 top-24 z-10 text-[10px] text-muted sm:right-8 sm:text-[11px]">
-            Sun path · {DAY_LABELS[day]} · 52° N · viewed from outside
+            Sun path · {DAY_LABELS[day]} · 52° N · viewed from outside, drag the sun
           </div>
         </div>
 
@@ -180,7 +218,7 @@ export default function AdaptivePanel({ params, onChange, resetViewKey }: Adapti
             <Chip label="Glare h" a={String(res.glare.static)} b={String(res.glare.kinetic)} />
             <Chip label="Moves" a="0" b={String(res.moves)} />
           </div>
-          <div className="order-3 text-xs leading-relaxed text-ink sm:order-1 sm:text-sm" data-testid="verdict">
+          <div className="order-3 text-xs leading-relaxed text-ink sm:order-1 sm:-mx-2 sm:w-fit sm:max-w-full sm:rounded sm:bg-canvas/80 sm:px-2 sm:py-1 sm:text-sm" data-testid="verdict">
             {verdict.map((l) => (
               <p key={l}>{l}</p>
             ))}
@@ -207,13 +245,13 @@ export default function AdaptivePanel({ params, onChange, resetViewKey }: Adapti
           <div className="relative flex flex-col gap-3 px-5 py-6 sm:h-full sm:overflow-y-auto sm:pt-24 md:px-6">
             <div className="flex flex-wrap gap-2">
               {DAY_LABELS.map((l, i) => (
-                <TagPill key={l} label={l} active={i === day} onClick={() => onChange("day", i)} />
+                <TagPill key={l} label={l} active={i === day} onClick={() => change("day", i)} />
               ))}
             </div>
 
             <div>
               <h2 className={`${heading} mb-2`}>Gain through glass · W/m²</h2>
-              <GainChart rows={rows} cap={cap} hour={hour} />
+              <GainChart rows={rows} cap={cap} hour={hour} focus={focus} />
             </div>
 
             <div>
@@ -222,16 +260,16 @@ export default function AdaptivePanel({ params, onChange, resetViewKey }: Adapti
                 <thead>
                   <tr className="text-[10px] text-muted">
                     <th className="text-left font-normal" />
-                    <th className="pb-1 text-right font-normal">static</th>
-                    <th className="pb-1 text-right font-normal">kinetic</th>
+                    <th className={`pb-1 text-right font-normal ${focus === "static" ? "text-ink underline underline-offset-4" : ""}`}>static</th>
+                    <th className={`pb-1 text-right font-normal ${focus === "kinetic" ? "text-ink underline underline-offset-4" : ""}`}>kinetic</th>
                   </tr>
                 </thead>
                 <tbody>
                   {totals.map(([k, s, kv]) => (
                     <tr key={k}>
                       <td className="py-0.5 text-muted">{k}</td>
-                      <td className="py-0.5 text-right text-muted">{s}</td>
-                      <td className="py-0.5 text-right font-bold text-ink">{kv}</td>
+                      <td className={`py-0.5 text-right ${focus === "static" ? "bg-pill pr-1 font-bold text-ink" : "text-muted"}`} data-col="static">{s}</td>
+                      <td className={`py-0.5 text-right ${focus === "static" ? "text-muted" : "font-bold text-ink"} ${focus === "kinetic" ? "bg-pill pr-1" : ""}`} data-col="kinetic">{kv}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -241,8 +279,8 @@ export default function AdaptivePanel({ params, onChange, resetViewKey }: Adapti
               </p>
             </div>
 
-            <Slider def={capDef} value={cap} onChange={onChange} />
-            <Slider def={depthDef} value={staticDepth} onChange={onChange} />
+            <Slider def={capDef} value={cap} onChange={change} />
+            <Slider def={depthDef} value={staticDepth} onChange={change} />
             <p className="text-[11px] text-muted">Gate: profile angle 45° (fixed).</p>
 
             <p className="text-[11px] leading-relaxed text-muted sm:hidden">{handCheck}</p>
@@ -261,7 +299,7 @@ export default function AdaptivePanel({ params, onChange, resetViewKey }: Adapti
               </button>
               <button
                 type="button"
-                onClick={() => meta.staticParams.forEach((d) => onChange(d.key, d.default))}
+                onClick={() => meta.staticParams.forEach((d) => change(d.key, d.default))}
                 className="text-muted underline underline-offset-4 transition-colors hover:text-accent"
               >
                 Reset to defaults

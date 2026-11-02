@@ -90,6 +90,44 @@ export function cameraPosition(aspect = CAMERA.refAspect): [number, number, numb
   return CAMERA.target.map((t, i) => t + (DIR[i] / DIR_LEN) * D) as [number, number, number];
 }
 
+// ---- interaction (Stage 3): play, drag snap, focus framing, blade easing
+export type Focus = "overview" | "static" | "kinetic";
+
+/** Play: next scrub hour, looping back to the first. */
+export function nextHour(hours: number[], h: number): number {
+  return hours[(hours.indexOf(h) + 1) % hours.length];
+}
+
+/** Index of the screen point nearest to p (drag-to-scrub snaps to the nearest hour tick). */
+export function nearestIndex(points: [number, number][], p: [number, number]): number {
+  let best = 0;
+  points.forEach((q, i) => {
+    if (Math.hypot(q[0] - p[0], q[1] - p[1]) < Math.hypot(points[best][0] - p[0], points[best][1] - p[1])) best = i;
+  });
+  return best;
+}
+
+/** Sun drag hit radius in CSS px (a 44 px target). */
+export const SUN_HIT_PX = 22;
+
+/** Focused-wall view: same direction as the overview, 18 m from the wall's centre. */
+const FOCUS_DISTANCE = 18;
+export function focusView(focus: Focus, aspect: number): { position: [number, number, number]; target: [number, number, number] } {
+  if (focus === "overview") return { position: cameraPosition(aspect), target: [...CAMERA.target] };
+  const target: [number, number, number] = [WALL_X[focus === "static" ? 0 : 1], WALL_H / 2, 0.3];
+  return { position: target.map((t, i) => t + (DIR[i] / DIR_LEN) * FOCUS_DISTANCE) as [number, number, number], target };
+}
+
+/**
+ * One frame of blade easing towards the rule's depth (time constant 0.1 s, so about 0.4 s); snaps when within 2 mm.
+ * dt is capped at one 30 fps frame: with frameloop="demand" the first frame after idle carries the whole idle time.
+ */
+export const MAX_FRAME_DT = 1 / 30;
+export function easeDepth(shown: number, target: number, dt: number): number {
+  const next = shown + (target - shown) * (1 - Math.exp(-Math.min(dt, MAX_FRAME_DT) / 0.1));
+  return Math.abs(target - next) < 0.002 ? target : next;
+}
+
 // ---- glass tint: live gain vs cap (blue at or below the cap, warming to the day's open-glass peak)
 type RGB = [number, number, number];
 export const BLUE: RGB = [0x3a, 0x5a, 0x8c];

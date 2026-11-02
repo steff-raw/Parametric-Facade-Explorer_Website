@@ -3,22 +3,26 @@
 /**
  * Adaptive Panel 3D scene (P-0023): static and kinetic blade walls, the sun on its 3D arc, live depth labels.
  * View only: depths, sun and tint come from the adaptive-panel engine/module. frameloop="demand" always;
- * blade easing calls invalidate() until settled. WebGL missing or context lost: thumbnail + message.
+ * blade easing and the focus tween call invalidate() until settled. Drag the sun to scrub (OrbitControls off during the
+ * drag, 44 px target); click a wall to focus it, empty space to return. WebGL missing or context lost: thumbnail + message.
  */
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Html, Line, OrbitControls } from "@react-three/drei";
+import { Billboard, Html, Line, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import { sun, sunPath } from "@/lib/patterns-3d/adaptive-panel/engine";
 import {
   ARC_RADIUS,
   CAMERA,
+  CELL,
   CAPPED,
   ELEMENT,
   LIGHT_DISTANCE,
+  MAX_FRAME_DT,
   ROWS,
   SKIN_GLASS,
+  SUN_HIT_PX,
   SUN_RADIUS,
   WALL_H,
   WALL_X,
@@ -26,10 +30,14 @@ import {
   bladeTransform,
   cameraPosition,
   css,
+  easeDepth,
+  focusView,
   fmtHour,
   glassTransform,
   heatT,
   mix,
+  nearestIndex,
+  type Focus,
 } from "@/lib/patterns-3d/adaptive-panel";
 
 const HEAT = "#c47a48";
@@ -48,9 +56,30 @@ export interface AdaptivePanel3DProps {
   cap: number;
   resetViewKey: number;
   fallbackSvg: string;
+  focus: Focus;
+  onFocus: (f: Focus) => void;
+  /** Sun drag picked an hour (also pauses play). */
+  onScrub: (hour: number) => void;
 }
 
-function Walls({ depths, tints }: { depths: [number, number]; tints: [string, string] }) {
+type Controls = {
+  target: THREE.Vector3;
+  update: () => void;
+  enabled: boolean;
+  enableDamping: boolean;
+  addEventListener: (t: string, f: () => void) => void;
+  removeEventListener: (t: string, f: () => void) => void;
+};
+
+/** Drop any orbit momentum left by damping, so a reset or tween is not pushed off its end point. */
+function flushDamping(c: Controls) {
+  const damping = c.enableDamping;
+  c.enableDamping = false;
+  c.update();
+  c.enableDamping = damping;
+}
+
+function Walls({ depths, tints, onFocus }: { depths: [number, number]; tints: [string, string]; onFocus: (f: Focus) => void }) {
   const glassRef = useRef<THREE.InstancedMesh>(null);
   const bladeRef = useRef<THREE.InstancedMesh>(null);
   const shown = useRef<[number, number]>([...depths]);
@@ -101,28 +130,31 @@ function Walls({ depths, tints }: { depths: [number, number]; tints: [string, st
 
   // Ease the drawn depth towards the rule's depth (about 0.4 s), one frame at a time.
   useFrame((_, delta) => {
-    const k = 1 - Math.exp(-Math.min(delta, 0.1) / 0.1);
-    let changed = false, moving = false;
+    let changed = false;
     for (let w = 0; w < 2; w++) {
-      const diff = depths[w] - shown.current[w];
-      if (diff === 0) continue;
+      if (shown.current[w] === depths[w]) continue;
+      shown.current[w] = easeDepth(shown.current[w], depths[w], delta);
       changed = true;
-      if (Math.abs(diff) < 0.002) shown.current[w] = depths[w];
-      else {
-        shown.current[w] += diff * k;
-        moving = true;
-      }
     }
-    if (changed) writeBlades();
-    if (moving) invalidate();
+    if (changed) {
+      writeBlades();
+      invalidate();
+    }
   });
+
+  // Click a wall (not an orbit drag) to focus it.
+  const click = (e: { delta: number; instanceId?: number; stopPropagation: () => void }) => {
+    if (e.delta > 4 || e.instanceId === undefined) return;
+    e.stopPropagation();
+    onFocus(e.instanceId < ROWS ? "static" : "kinetic");
+  };
 
   return (
     <>
-      <instancedMesh ref={glassRef} args={[geo, undefined, 2 * ROWS]} receiveShadow frustumCulled={false}>
+      <instancedMesh ref={glassRef} args={[geo, undefined, 2 * ROWS]} receiveShadow frustumCulled={false} onClick={click}>
         <meshStandardMaterial roughness={0.35} metalness={0.05} />
       </instancedMesh>
-      <instancedMesh ref={bladeRef} args={[geo, undefined, 2 * ROWS]} castShadow receiveShadow frustumCulled={false}>
+      <instancedMesh ref={bladeRef} args={[geo, undefined, 2 * ROWS]} castShadow receiveShadow frustumCulled={false} onClick={click}>
         <meshStandardMaterial roughness={0.7} metalness={0.05} />
       </instancedMesh>
     </>
@@ -168,6 +200,7 @@ function SunAndArc({ month, hour, hours, shadows }: { month: number; hour: numbe
         <sphereGeometry args={[SUN_RADIUS, 24, 16]} />
         <meshBasicMaterial color={up ? HEAT : "#5a4434"} toneMapped={false} />
       </mesh>
+      <DragRing position={pos} />
       <Html position={[pos[0], pos[1] - 1.1, pos[2]]} center className="pointer-events-none whitespace-nowrap text-[10px] text-muted tabular-nums">
         {fmtHour(hour)}
       </Html>
@@ -191,28 +224,198 @@ function SunAndArc({ month, hour, hours, shadows }: { month: number; hour: numbe
   );
 }
 
-/** Applies the camera rule on mount, on resize (aspect) and on "Reset view". */
-function CameraRig({ resetViewKey }: { resetViewKey: number }) {
+/** 44 px drag ring around the sun: radius SUN_HIT_PX in screen pixels at any zoom. */
+function DragRing({ position }: { position: Vec3 }) {
+  const ref = useRef<THREE.Mesh>(null);
+  const v = useMemo(() => new THREE.Vector3(), []);
+  useFrame(({ camera, size }) => {
+    const cam = camera as THREE.PerspectiveCamera;
+    const perPx = (2 * cam.position.distanceTo(v.set(...position)) * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2))) / size.height;
+    ref.current?.scale.setScalar(Math.max(SUN_HIT_PX * perPx, SUN_RADIUS * 1.3));
+  });
+  return (
+    <Billboard position={position}>
+      <mesh ref={ref}>
+        <ringGeometry args={[0.92, 1, 48]} />
+        <meshBasicMaterial color={HEAT} transparent opacity={0.55} toneMapped={false} />
+      </mesh>
+    </Billboard>
+  );
+}
+
+/**
+ * Drag-to-scrub. Capture-phase listeners on window run before OrbitControls (on the canvas): a press inside the scene
+ * within SUN_HIT_PX of the sun (or its drawn radius) starts a drag, OrbitControls is disabled until release, and the
+ * pointer snaps to the nearest hour tick on screen. Window, not the canvas, because the page's title row overlays the
+ * top of the scene on desktop, where the June noon sun sits; presses on real controls there are left alone.
+ */
+function SunDrag({ month, hour, hours, onScrub }: { month: number; hour: number; hours: number[]; onScrub: (h: number) => void }) {
+  const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
+  const gl = useThree((s) => s.gl);
+  const controls = useThree((s) => s.controls) as unknown as Controls | null;
+  const live = useRef({ month, hour, hours, onScrub });
+  live.current = { month, hour, hours, onScrub };
+
+  useEffect(() => {
+    const el = gl.domElement.parentElement;
+    if (!el) return;
+    const v = new THREE.Vector3();
+    const local = (e: PointerEvent): [number, number] => {
+      const r = el.getBoundingClientRect();
+      return [e.clientX - r.left, e.clientY - r.top];
+    };
+    const screen = (h: number): [number, number] => {
+      const r = el.getBoundingClientRect();
+      v.set(...scale(sun(live.current.month, h).vec, ARC_RADIUS)).project(camera);
+      return [((v.x + 1) / 2) * r.width, ((1 - v.y) / 2) * r.height];
+    };
+    const onSun = (e: PointerEvent) => {
+      const [sx, sy] = screen(live.current.hour);
+      const [px, py] = local(e);
+      const h = el.getBoundingClientRect().height;
+      const drawn = (SUN_RADIUS / (camera.position.distanceTo(v.set(...scale(sun(live.current.month, live.current.hour).vec, ARC_RADIUS))) * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)))) * (h / 2);
+      return Math.hypot(px - sx, py - sy) <= Math.max(SUN_HIT_PX, drawn);
+    };
+    let dragging = false, justDragged = false;
+    const inScene = (e: PointerEvent) => {
+      const r = el.getBoundingClientRect();
+      const t = e.target as Element | null;
+      return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom &&
+        !t?.closest?.("a, button, input, select, textarea, label, summary, [role=button]");
+    };
+    const down = (e: PointerEvent) => {
+      if ((e.pointerType === "mouse" && e.button !== 0) || !inScene(e) || !onSun(e)) return;
+      e.stopPropagation();
+      e.preventDefault();
+      dragging = true;
+      if (controls) controls.enabled = false;
+      el.setPointerCapture(e.pointerId);
+      el.style.cursor = "grabbing";
+    };
+    const move = (e: PointerEvent) => {
+      if (!dragging) {
+        if (e.pointerType === "mouse" && !e.buttons) el.style.cursor = inScene(e) && onSun(e) ? "grab" : "";
+        return;
+      }
+      e.stopPropagation();
+      const { hours: hs, hour: now } = live.current;
+      const next = hs[nearestIndex(hs.map(screen), local(e))];
+      if (next !== now) live.current.onScrub(next);
+    };
+    const up = (e: PointerEvent) => {
+      if (!dragging) return;
+      e.stopPropagation();
+      dragging = false;
+      justDragged = true;
+      window.setTimeout(() => (justDragged = false), 0); // touch drags fire no click
+      if (controls) controls.enabled = true;
+      if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+      el.style.cursor = "grab";
+    };
+    // The click after a drag must not reach the scene (it would reset focus).
+    const click = (e: MouseEvent) => {
+      if (justDragged) e.stopPropagation();
+      justDragged = false;
+    };
+    const opts = { capture: true };
+    window.addEventListener("pointerdown", down, opts);
+    window.addEventListener("pointermove", move, opts);
+    window.addEventListener("pointerup", up, opts);
+    window.addEventListener("pointercancel", up, opts);
+    window.addEventListener("click", click, opts);
+    return () => {
+      window.removeEventListener("pointerdown", down, opts);
+      window.removeEventListener("pointermove", move, opts);
+      window.removeEventListener("pointerup", up, opts);
+      window.removeEventListener("pointercancel", up, opts);
+      window.removeEventListener("click", click, opts);
+      if (controls) controls.enabled = true;
+    };
+  }, [gl, camera, controls]);
+  return null;
+}
+
+/**
+ * Camera: the J2 rule on mount and resize (or the focused view), the rule on "Reset view", and a 0.6 s tween of both
+ * camera.position and controls.target when the focus changes (so the next orbit does not snap back).
+ */
+function CameraRig({ resetViewKey, focus }: { resetViewKey: number; focus: Focus }) {
   const camera = useThree((s) => s.camera);
   const size = useThree((s) => s.size);
-  const controls = useThree((s) => s.controls) as unknown as { target: THREE.Vector3; update: () => void } | null;
+  const controls = useThree((s) => s.controls) as unknown as Controls | null;
   const invalidate = useThree((s) => s.invalidate);
-  useEffect(() => {
-    camera.position.set(...cameraPosition(size.width / size.height));
-    camera.lookAt(...CAMERA.target);
+  const focusRef = useRef(focus);
+  const tween = useRef<{ p0: THREE.Vector3; t0: THREE.Vector3; p1: THREE.Vector3; t1: THREE.Vector3; t: number } | null>(null);
+  const aspect = size.width / size.height;
+
+  const place = (f: Focus) => {
+    tween.current = null;
+    const v = focusView(f, aspect);
+    if (controls) flushDamping(controls);
+    camera.position.set(...v.position);
+    camera.lookAt(...v.target);
     if (controls) {
-      controls.target.set(...CAMERA.target);
+      controls.target.set(...v.target);
       controls.update();
     }
     invalidate();
-  }, [camera, size.width, size.height, controls, resetViewKey, invalidate]);
+  };
+
+  // Mount / resize: keep the current view's framing.
+  useEffect(() => place(focusRef.current), [camera, size.width, size.height, controls]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Reset view: the camera rule.
+  useEffect(() => place("overview"), [resetViewKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (focusRef.current === focus || !controls) return;
+    focusRef.current = focus;
+    flushDamping(controls);
+    const v = focusView(focus, aspect);
+    tween.current = { p0: camera.position.clone(), t0: controls.target.clone(), p1: new THREE.Vector3(...v.position), t1: new THREE.Vector3(...v.target), t: 0 };
+    invalidate();
+  }, [focus]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A user orbit cancels a running tween.
+  useEffect(() => {
+    if (!controls) return;
+    const stop = () => (tween.current = null);
+    controls.addEventListener("start", stop);
+    return () => controls.removeEventListener("start", stop);
+  }, [controls]);
+
+  useFrame((_, delta) => {
+    const tw = tween.current;
+    if (!tw || !controls) return;
+    tw.t = Math.min(1, tw.t + Math.min(delta, MAX_FRAME_DT) / 0.6); // capped: first frame after idle carries the idle time
+    const k = tw.t < 0.5 ? 2 * tw.t * tw.t : 1 - (-2 * tw.t + 2) ** 2 / 2;
+    camera.position.lerpVectors(tw.p0, tw.p1, k);
+    controls.target.lerpVectors(tw.t0, tw.t1, k);
+    controls.update();
+    if (tw.t < 1) invalidate();
+    else tween.current = null;
+  });
   return null;
+}
+
+/** Dashed outline round the focused wall (front plane of a full 0.6 m blade). */
+function FocusOutline({ wall }: { wall: number }) {
+  const x0 = WALL_X[wall] - CELL / 2 - 0.12, x1 = WALL_X[wall] + CELL / 2 + 0.12, y0 = 0.02, y1 = WALL_H + 0.15, z = 0.65;
+  return (
+    <Line
+      points={[[x0, y0, z], [x1, y0, z], [x1, y1, z], [x0, y1, z], [x0, y0, z]]}
+      color="#e8e8e8"
+      lineWidth={1.25}
+      dashed
+      dashSize={0.25}
+      gapSize={0.18}
+    />
+  );
 }
 
 const label = "pointer-events-none whitespace-nowrap text-[10px] text-muted sm:text-[11px]";
 
 export default function AdaptivePanel3D(props: AdaptivePanel3DProps) {
-  const { month, hour, hours, staticDepth, kineticDepth, cap, resetViewKey, fallbackSvg } = props;
+  const { month, hour, hours, staticDepth, kineticDepth, cap, resetViewKey, fallbackSvg, focus, onFocus, onScrub } = props;
   const [webgl, setWebgl] = useState<boolean | null>(null);
   const [phone, setPhone] = useState(false);
 
@@ -250,6 +453,7 @@ export default function AdaptivePanel3D(props: AdaptivePanel3DProps) {
         shadows={!phone}
         dpr={phone ? [1, 1.5] : [1, 2]}
         camera={{ position: cameraPosition(), fov: CAMERA.fov, near: 0.1, far: 200 }}
+        onPointerMissed={() => onFocus("overview")}
         gl={{ antialias: true, alpha: false }}
         onCreated={({ gl }) => {
           gl.setClearColor("#0d0d0d");
@@ -263,7 +467,8 @@ export default function AdaptivePanel3D(props: AdaptivePanel3DProps) {
         <hemisphereLight args={["#f2f0ea", "#3a3a3a", 0.4]} />
         <directionalLight position={[-6, 4, -5]} intensity={0.3} />
         <SunAndArc month={month} hour={hour} hours={hours} shadows={!phone} />
-        <Walls depths={depths} tints={tints} />
+        <Walls depths={depths} tints={tints} onFocus={onFocus} />
+        {focus !== "overview" && <FocusOutline wall={focus === "static" ? 0 : 1} />}
 
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 2]} receiveShadow>
           <planeGeometry args={[11, 11]} />
@@ -273,9 +478,10 @@ export default function AdaptivePanel3D(props: AdaptivePanel3DProps) {
 
         {(
           [
-            ["W", [-6, 0, 2]],
+            // W and S sit off the grid's west / south edges, clear of the depth labels at the wall bases.
+            ["W", [-6.5, 0, -4]],
             ["E", [6, 0, 2]],
-            ["S", [0, 0, 8]],
+            ["S", [0, 0, 11]],
             ["N", [0, 0, -4]],
           ] as [string, Vec3][]
         ).map(([t, p]) => (
@@ -284,15 +490,15 @@ export default function AdaptivePanel3D(props: AdaptivePanel3DProps) {
           </Html>
         ))}
 
-        {/* Depth labels above the walls: static to the left, kinetic to the right (they overlap if centred). */}
-        <Html position={[WALL_X[0] - 0.75, WALL_H + 0.6, 0]} className={label}>
-          <div className="-translate-x-full -translate-y-full text-right">
+        {/* Depth labels at the wall bases (as the reference), clear of the sun arc: static to the left, kinetic to the right. */}
+        <Html position={[WALL_X[0] - 0.75, 0, 0.6]} className={label}>
+          <div className="-translate-x-full pt-1 text-right">
             <div className="text-xs text-ink sm:text-sm">Static</div>
             <div className="tabular-nums">Fixed blade {staticDepth.toFixed(2)} m</div>
           </div>
         </Html>
-        <Html position={[WALL_X[1] + 0.75, WALL_H + 0.6, 0]} className={label}>
-          <div className="-translate-y-full text-left">
+        <Html position={[WALL_X[1] + 0.75, 0, 0.6]} className={label}>
+          <div className="text-left">
             <div className="text-xs text-ink sm:text-sm">Kinetic</div>
             <div className="tabular-nums" data-testid="kinetic-depth">
               {kineticDepth.toFixed(2)} m at {fmtHour(hour)}
@@ -300,7 +506,8 @@ export default function AdaptivePanel3D(props: AdaptivePanel3DProps) {
           </div>
         </Html>
 
-        <CameraRig resetViewKey={resetViewKey} />
+        <CameraRig resetViewKey={resetViewKey} focus={focus} />
+        <SunDrag month={month} hour={hour} hours={hours} onScrub={onScrub} />
         <OrbitControls makeDefault enablePan={!phone} enableZoom minDistance={CAMERA.minDistance} maxDistance={CAMERA.maxDistance} target={CAMERA.target} />
       </Canvas>
     </div>

@@ -227,10 +227,77 @@ check("t", "blade: depth 0.5 -> scale z 0.5, centre z 0.25, top at cell top; d =
   near(t1.scale[2], 0.5, 1e-9) && near(t1.position[2], 0.25, 1e-9) && near(t1.position[1] + t1.scale[1] / 2, 7.5, 1e-9) &&
   t0.scale.every((v) => v === 0) && V.getElementCount() === 20 && near(V.glassTransform(0, 0).position[0], -1.5, 1e-9));
 
+// ---- Stage 3: interaction helpers (play, drag snap, focus framing, blade easing)
+// (u) play loops through the day's scrub hours and wraps back to the first
+const junH = V.scrubHours(JUN), decH = V.scrubHours(DEC);
+const playSeq = [];
+for (let h = junH[0], i = 0; i < 11; i++, h = V.nextHour(junH, h)) playSeq.push(h);
+check("u", "play: Jun 07:30 -> 16:30 then wraps to 07:30; Dec 15:30 -> 08:30",
+  `${playSeq.map(V.fmtHour).join(" ")} | Dec ${V.fmtHour(V.nextHour(decH, 15.5))}`,
+  playSeq.slice(0, 10).every((h, i) => h === junH[i]) && playSeq[10] === 7.5 && V.nextHour(decH, 15.5) === 8.5);
+
+// (v) drag snap: pointer on (or 30 px past) each tick's screen point snaps to that hour, at 390x464 and 940x640, all days
+function screenTicks(w, h, m, cam) {
+  return V.scrubHours(m).map((hr) => {
+    const p = new THREE.Vector3(...sun(m, hr).vec.map((v) => v * V.ARC_RADIUS)).project(cam);
+    return [((p.x + 1) / 2) * w, ((1 - p.y) / 2) * h];
+  });
+}
+let vBad = 0, vN = 0;
+const vEnds = [];
+for (const [w, h] of [[390, 464], [940, 640]]) {
+  const cam = new THREE.PerspectiveCamera(V.CAMERA.fov, w / h, 0.1, 500);
+  cam.position.set(...V.cameraPosition(w / h));
+  cam.lookAt(...V.CAMERA.target);
+  cam.updateMatrixWorld();
+  for (const m of DAY_MONTHS) {
+    const pts = screenTicks(w, h, m, cam);
+    pts.forEach((p, i) => { vN++; if (V.nearestIndex(pts, p) !== i) vBad++; });
+    const n = pts.length;
+    if (w === 390) vEnds.push(`${NAMES[m]} ${f(pts[0][0], 0)},${f(pts[0][1], 0)}..${f(pts[n - 1][0], 0)},${f(pts[n - 1][1], 0)}`);
+  }
+}
+check("v", "drag snap: pointer on each hour tick snaps to that hour (390x464, 940x640, 3 days)", `${vN} probes, ${vBad} wrong`, vBad === 0);
+check("v", "drag ends at 390x464 inside the viewer (16 px margin)", vEnds.join(" | "),
+  vEnds.length === 3 && DAY_MONTHS.every((m) => {
+    const cam = new THREE.PerspectiveCamera(V.CAMERA.fov, 390 / 464, 0.1, 500);
+    cam.position.set(...V.cameraPosition(390 / 464)); cam.lookAt(...V.CAMERA.target); cam.updateMatrixWorld();
+    return screenTicks(390, 464, m, cam).every(([x, y]) => x >= 16 && x <= 374 && y >= 16 && y <= 448);
+  }));
+check("v", "sun hit target radius >= 22 px (44 px ring)", `${V.SUN_HIT_PX} px`, V.SUN_HIT_PX >= 22);
+
+// (w) focus framing: target on the clicked wall; that wall inside NDC +-0.92 and >= 50% of viewer height; overview = camera rule
+for (const [w, h] of [[940, 640], [390, 464]]) {
+  const res = [];
+  for (const [wall, name] of [[0, "static"], [1, "kinetic"]]) {
+    const fv = V.focusView(name, w / h);
+    const cam = new THREE.PerspectiveCamera(V.CAMERA.fov, w / h, 0.1, 500);
+    cam.position.set(...fv.position); cam.lookAt(...fv.target); cam.updateMatrixWorld();
+    const cx = V.WALL_X[wall];
+    const pts = [cx - V.CELL / 2, cx + V.CELL / 2].flatMap((x) => [0, V.WALL_H].flatMap((y) => [-0.07, 0.6].map((z) => new THREE.Vector3(x, y, z).project(cam))));
+    const maxAbs = Math.max(...pts.flatMap((p) => [Math.abs(p.x), Math.abs(p.y)]));
+    const fill = (Math.max(...pts.map((p) => p.y)) - Math.min(...pts.map((p) => p.y))) / 2;
+    const d = Math.hypot(...fv.position.map((v, i) => v - fv.target[i]));
+    res.push({ name, ok: fv.target[0] === cx && maxAbs <= 0.92 && fill >= 0.5 && d >= V.CAMERA.minDistance, txt: `${name} max ${f(maxAbs)} fill ${f(100 * fill, 0)}% D ${f(d, 1)}` });
+  }
+  const ov = V.focusView("overview", w / h);
+  const ovOk = ov.position.every((v, i) => near(v, V.cameraPosition(w / h)[i], 1e-9)) && ov.target.every((v, i) => v === V.CAMERA.target[i]);
+  check("w", `focus ${w}x${h}: wall framed (NDC <= 0.92, fill >= 50%), overview = camera rule`, `${res.map((r) => r.txt).join(" | ")} | overview ${ovOk}`, res.every((r) => r.ok) && ovOk);
+}
+
+// (x) blade easing: about 0.4 s, mid-motion after 0.15 s, settled (exact) by 0.7 s; 60 fps steps
+const ease = (from, to, secs) => { let d = from; for (let t = 0; t < secs - 1e-9; t += 1 / 60) d = V.easeDepth(d, to, 1 / 60); return d; };
+const x15 = ease(0, 0.5, 0.15), x40 = ease(0, 0.5, 0.4), x70 = ease(0, 0.5, 0.7);
+check("x", "easing 0 -> 0.5 m: mid-motion at 0.15 s, >= 95% at 0.4 s, exactly 0.5 by 0.7 s", `${f(x15, 3)} / ${f(x40, 3)} / ${f(x70, 3)}`,
+  x15 > 0.1 && x15 < 0.45 && x40 >= 0.475 && x70 === 0.5 && V.easeDepth(0.3, 0.3, 1 / 60) === 0.3);
+// demand frameloop: the first frame after an idle spell carries the whole idle time as its delta; it must not jump
+const idle = V.easeDepth(0, 0.5, 5);
+check("x", "first frame after 5 s idle moves < 35% of the step (no jump)", `${f((100 * idle) / 0.5, 0)} %`, idle > 0 && idle < 0.35 * 0.5);
+
 // ---- print
 const pad = (v, w) => String(v).padEnd(w);
 const passed = rows.filter((x) => x.pass).length;
-console.log("Adaptive Panel, Stage 1 + 2 checks (P-0023)\n");
+console.log("Adaptive Panel, Stage 1 + 2 + 3 checks (P-0023)\n");
 console.log(`${pad("case", 5)}${pad("check", 80)}${pad("value", 62)}result`);
 console.log("-".repeat(153));
 for (const x of rows) console.log(`${pad(x.id, 5)}${pad(x.what, 80)}${pad(x.got, 62)}${x.pass ? "PASS" : "FAIL"}`);
