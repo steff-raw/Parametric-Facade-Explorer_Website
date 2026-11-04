@@ -239,8 +239,10 @@ const PROTO_RANGE = {
 };
 for (const s of SCORED) {
   const b = A.getBadge(s), p = PROTO[s], [lo, hi] = PROTO_RANGE[s];
-  check("P", `${s}: blocks inside the prototype's N 10..40 range ${lo}-${hi} (prototype N 20: ${p[0]} / ${p[1]})`,
-    `${f(b.blocks)} / ${f(b.winterKept)} (diff ${f(b.blocks - p[0])} / ${f(b.winterKept - p[1])})`, b.blocks >= lo && b.blocks <= hi);
+  // Stage 2 checkpoint: range alone is too loose, so both numbers must also be within 3 points of the N 20 lattice value.
+  const dB = b.blocks - p[0], dW = b.winterKept - p[1];
+  check("P", `${s}: blocks in prototype N 10..40 range ${lo}-${hi}, and blocks, winter <= 3 points of N 20 (${p[0]} / ${p[1]})`,
+    `${f(b.blocks)} / ${f(b.winterKept)} (diff ${f(dB)} / ${f(dW)})`, b.blocks >= lo && b.blocks <= hi && Math.abs(dB) <= 3 && Math.abs(dW) <= 3);
 }
 
 // (S) sample-count sensitivity: every N = 10..40 at the central 60% window; window share at N 20 (diagnostic)
@@ -283,10 +285,44 @@ const rb = ring.boundingBox;
 const ringOk = near(rb.max.x - rb.min.x, hs[0] + 2 * H.defaults.frameWidth, 1e-6) && near(rb.max.z - rb.min.z, Math.max(hs[2] * 0.85, 0.02), 1e-6) && G.FRAME_CLEARANCE === A.FRAME_CLEARANCE;
 check("T1", "shared door-frame builder: outer width, depth and clearance = the scorer's frame bars", `w ${f(rb.max.x - rb.min.x, 3)} d ${f(rb.max.z - rb.min.z, 3)}`, ringOk);
 
+// ---------------------------------------------------------------- Stage 3: card label and thumbnail framing
+const LB = await import("../src/lib/pattern-badge/label.ts");
+// (R) badge numbers read as approximate: nearest 5 with a leading "~"
+const cases = [[76.5, "~75%"], [67.5, "~70%"], [98.4, "~100%"], [11.2, "~10%"], [2.4, "~0%"], [36.7, "~35%"]];
+const bad = cases.filter(([v, want]) => LB.approx(v) !== want);
+check("R", "badge rounding: nearest 5 with '~' (76.5 -> ~75%, 67.5 -> ~70%, 98.4 -> ~100%)", bad.length ? `wrong: ${bad.map(([v]) => `${v} -> ${LB.approx(v)}`).join(", ")}` : cases.map(([v, w]) => `${v}->${w}`).join(" "), bad.length === 0);
+check("R", "n/a reason for every flat slug; tooltip names south, 51.5 N, May-Aug, default pose, neighbour block ignored",
+  FLAT.map((s) => LB.naReason(s)).join(" | ").slice(0, 60),
+  FLAT.every((s) => LB.naReason(s).length > 10) && /south.*51\.5 N.*May-Aug.*default pose.*neighbour block ignored/i.test(LB.SUN_TOOLTIP));
+// (C) fit-to-content framing at the card aspect (square): every drawn instance corner projected with the thumbnail
+// camera; long side fills 70-85% of the frame, content centred within 5%, nothing outside. Instances = getElementCount.
+const corners = (mesh) => {
+  mesh.geometry.computeBoundingBox();
+  const g = mesh.geometry.boundingBox, m = new THREE.Matrix4(), v = new THREE.Vector3(), pts = [];
+  for (let i = 0; i < mesh.count; i++) {
+    mesh.getMatrixAt(i, m);
+    for (let k = 0; k < 8; k++) pts.push(v.set(k & 1 ? g.max.x : g.min.x, k & 2 ? g.max.y : g.min.y, k & 4 ? g.max.z : g.min.z).clone().applyMatrix4(m));
+  }
+  return pts;
+};
+for (const s of SCORED) {
+  const { scene, camera, mesh, count } = T.buildThumbScene(s);
+  camera.updateMatrixWorld();
+  const meshes = [];
+  scene.traverse((o) => { if (o.isInstancedMesh) meshes.push(o); });
+  const ndc = meshes.flatMap(corners).map((p) => p.project(camera));
+  const xs = ndc.map((p) => p.x), ys = ndc.map((p) => p.y);
+  const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  const fill = Math.max(x1 - x0, y1 - y0) / 2, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  check("C", `${s}: framing at aspect ${camera.aspect}: long side 70-85%, centred within 5%, instances = getElementCount`,
+    `fill ${f(100 * fill, 0)}% centre ${f(cx, 2)},${f(cy, 2)} instances ${mesh.count}/${count}`,
+    camera.aspect === 1 && fill >= 0.7 && fill <= 0.85 && Math.abs(cx) <= 0.05 && Math.abs(cy) <= 0.05 && mesh.count === count);
+}
+
 // ---------------------------------------------------------------- print
 const pad = (s, n) => String(s).padEnd(n);
 const passed = rows.filter((r) => r.pass).length;
-console.log("Pattern Performance Badge, Stage 1 + 2 checks (P-0038)");
+console.log("Pattern Performance Badge, Stage 1 + 2 + 3 checks (P-0038)");
 console.log("South, 51.5 N, clear sky, summer May-Aug, default pose (kinetic t = 0), neighbour block ignored\n");
 console.log(`${pad("slug", 24)}${pad("boxes", 7)}${pad("blocks %", 10)}${pad("winter kept %", 15)}${pad("g_tot", 7)}${pad("full blocks / winter", 22)}ms`);
 console.log("-".repeat(90));

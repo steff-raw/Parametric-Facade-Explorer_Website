@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { type ReactNode, useEffect, useMemo } from "react";
 import {
   PatternModule,
   PatternParams,
@@ -161,11 +161,14 @@ export function PatternThumbnail({
   params,
   className = "",
   showKineticBadge = false,
+  children,
 }: {
   pattern: PatternModule;
   params?: PatternParams;
   className?: string;
   showKineticBadge?: boolean;
+  /** Overlays drawn above the SVG preview and below the 3D icon. */
+  children?: ReactNode;
 }) {
   const svg = useMemo(
     () => getThumbnailSvg(pattern, params),
@@ -185,6 +188,7 @@ export function PatternThumbnail({
         dangerouslySetInnerHTML={{ __html: svg }}
         aria-hidden
       />
+      {children}
       {(showKineticBadge || is3D) && (
         <span
           className="absolute bottom-3 left-3 inline-flex h-7 w-7 items-center justify-center rounded-full border border-line bg-pill text-ink"
