@@ -42,8 +42,10 @@ async function open(path, vp, { noWebGL = false } = {}) {
   return { page, logs };
 }
 
-/** Wait until every scored card has its 3D image (or the timeout passes). */
+/** Scroll every card into view (thumbnails render near the viewport only), back to top, then wait for every 3D image. */
 async function waitThumbs(page, want) {
+  for (const a of await page.$$("div.grid > a")) { await a.scrollIntoViewIfNeeded(); await page.waitForTimeout(150); }
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.waitForFunction((n) => document.querySelectorAll("[data-sun-badge]").length >= n &&
     document.querySelectorAll("img[data-thumb3d]").length >= n, want, { timeout: 30000 }).catch(() => {});
   await page.waitForTimeout(500);
@@ -71,6 +73,8 @@ const cardBadges = (page) => page.$$eval("div.grid > a", (as) => as.map((a) => {
     kind: el ? (el.hasAttribute("data-sun-badge") ? "badge" : "na") : "none",
     text: el ? el.textContent.replace(/\s+/g, " ").trim() : "",
     title: el ? el.getAttribute("title") || "" : "",
+    aria: el ? el.getAttribute("aria-label") || "" : "",
+    role: el ? el.getAttribute("role") || "" : "",
     inside: kids.every((k) => inside(k.getBoundingClientRect())),
     clipped: kids.some((k) => k.scrollWidth > k.clientWidth + 1),
     // no wrapped lines: badge is two text lines (13 + 10 px) at most 44 px tall; pill one line
@@ -80,6 +84,14 @@ const cardBadges = (page) => page.$$eval("div.grid > a", (as) => as.map((a) => {
     svgVisible,
   };
 }));
+
+// Badges come from static JSON, so they are in the server HTML (no ray test in the page); brick screen shows the cap.
+if (!baseline) {
+  const html = await (await fetch(base + "/")).text();
+  const n = (html.match(/data-sun-badge/g) || []).length;
+  const cap = /Blocks (<!-- -->)?&gt;95%/.test(html);
+  check("P", "server HTML of / already holds all 6 sun badges (precomputed, no client scoring); brick screen 'Blocks >95%'", `${n} badges, >95% ${cap}`, n === SCORED.length && cap);
+}
 
 const snap = {};
 for (const vp of VIEWPORTS) {
@@ -92,10 +104,12 @@ for (const vp of VIEWPORTS) {
     const badges = await cardBadges(page);
     for (const s of SCORED) {
       const b = badges.find((x) => x.href === `/patterns/${s}`);
-      const ok = b && b.kind === "badge" && /^Blocks ~\d+% winter kept ~\d+%$/.test(b.text) && b.inside && !b.clipped && b.oneLine && b.img && /south.*51\.5 N.*May-Aug.*default pose.*neighbour block ignored/i.test(b.title);
-      check("1-2", `${vp.name} px ${s}: 3D image + badge 'Blocks ~X% / winter kept ~Y%' inside thumbnail, tooltip`, b ? `${b.text} | img ${b.img} | inside ${b.inside}` : "missing", !!ok);
-      const nums = b ? [...b.text.matchAll(/~(\d+)%/g)].map((m) => +m[1]) : [];
-      check("R", `${vp.name} px ${s}: numbers rounded to nearest 5`, nums.join(" / "), nums.length === 2 && nums.every((n) => n % 5 === 0));
+      const ok = b && b.kind === "badge" && /^Blocks (~\d+|>95|<5)% winter kept (~\d+|>95|<5)%$/.test(b.text) && b.inside && !b.clipped && b.oneLine && b.img && /south.*51\.5 N.*May-Aug.*default pose.*neighbour block ignored/i.test(b.title) &&
+        /^Sun badge: blocks (about \d+|over 95|under 5)%, winter kept (about \d+|over 95|under 5)%\.$/.test(b.aria) && b.role === "img";
+      check("1-2", `${vp.name} px ${s}: 3D image + badge 'Blocks ~X% / winter kept ~Y%' inside thumbnail, tooltip, aria-label`, b ? `${b.text} | img ${b.img} | inside ${b.inside} | ${b.aria}` : "missing", !!ok);
+      const vals = b ? [...b.text.matchAll(/([~<>])(\d+)%/g)].map((m) => m[1] + m[2]) : [];
+      check("R", `${vp.name} px ${s}: nearest 5 with '~', capped '>95%' / '<5%', never ~0% / ~100%`, vals.join(" / "),
+        vals.length === 2 && vals.every((v) => (v[0] === "~" && +v.slice(1) % 5 === 0 && +v.slice(1) > 0 && +v.slice(1) < 100) || v === ">95" || v === "<5"));
     }
     for (const s of FLAT) {
       const b = badges.find((x) => x.href === `/patterns/${s}`);

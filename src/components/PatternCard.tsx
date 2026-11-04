@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { PatternModule, PatternParams } from "@/lib/patterns";
 import { approx, naReason, SUN_TOOLTIP } from "@/lib/pattern-badge/label";
+import BADGES from "@/lib/pattern-badge/badges.json";
 import { PatternThumbnail } from "./PatternCanvas";
 
 interface PatternCardProps {
@@ -14,6 +15,9 @@ interface PatternCardProps {
 }
 
 type Sun = { blocks: number; winterKept: number };
+
+/** Screen-reader wording of a rounded value: "~60%" -> "about 60%", ">95%" -> "over 95%", "<5%" -> "under 5%". */
+const spoken = (v: number) => approx(v).replace("~", "about ").replace(">", "over ").replace("<", "under ");
 
 export default function PatternCard({
   pattern,
@@ -26,31 +30,44 @@ export default function PatternCard({
   const flat = pattern.meta.type === "static-2d";
   // Score and 3D render are of the default pose, so only when the card shows defaults.
   const scored = !flat && !params;
-  const [sun, setSun] = useState<Sun | null>(null);
+  // Precomputed (badges.json, asserted equal to the scorer by pattern-badge-checks): no ray test in the page.
+  const sun: Sun | null = scored ? ((BADGES as Record<string, Sun>)[slug] ?? null) : null;
   const [thumb, setThumb] = useState<string | null>(null);
+  const card = useRef<HTMLAnchorElement>(null);
 
-  // After first paint: three.js and the ray test load in their own chunk; no WebGL keeps the SVG.
+  // 3D render only when the card nears the viewport: three.js loads in its own chunk then; no WebGL keeps the SVG.
   useEffect(() => {
-    if (!scored) return;
+    const el = card.current;
+    if (!scored || !el || typeof IntersectionObserver === "undefined") return;
     let live = true;
-    import("@/lib/pattern-badge/thumb3d").then(({ loadBadge, renderThumb3D }) => {
-      loadBadge(slug).then((b) => live && b && setSun(b));
-      renderThumb3D(slug).then((t) => live && t && setThumb(t.url));
-    });
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return;
+        io.disconnect();
+        import("@/lib/pattern-badge/thumb3d").then(({ renderThumb3D }) =>
+          renderThumb3D(slug).then((t) => live && t && setThumb(t.url)),
+        );
+      },
+      { rootMargin: "200px" },
+    );
+    io.observe(el);
     return () => {
       live = false;
+      io.disconnect();
     };
   }, [slug, scored]);
 
   return (
-    <Link href={to} className="group block">
+    <Link ref={card} href={to} className="group block">
       <PatternThumbnail
         pattern={pattern}
         params={params}
         className="transition-opacity group-hover:opacity-90"
+        // Headroom so the top-left badge / pill sits above the SVG artwork, not on it.
+        previewClassName={sun || flat ? "pt-[52px] pb-3" : ""}
       >
         {thumb && (
-          // eslint-disable-next-line @next/next/no-img-element -- data URL rendered in the browser
+          // eslint-disable-next-line @next/next/no-img-element -- object URL rendered in the browser
           <img
             src={thumb}
             alt=""
@@ -61,6 +78,8 @@ export default function PatternCard({
         {sun && (
           <span
             data-sun-badge
+            role="img"
+            aria-label={`Sun badge: blocks ${spoken(sun.blocks)}, winter kept ${spoken(sun.winterKept)}.`}
             title={SUN_TOOLTIP}
             className="absolute left-3 top-3 flex items-center gap-2 whitespace-nowrap rounded-md border border-[#444] bg-[#1f2a30]/90 px-2.5 py-1"
           >
