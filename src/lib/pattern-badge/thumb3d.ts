@@ -4,8 +4,8 @@
  * One shared offscreen THREE.WebGLRenderer draws each 3D pattern's instanced mesh at its
  * defaults (kinetic at t = 0) with the detail-page camera and lights, plus a backplate on the
  * glazing plane tinted from the ray map (amber = sun reaches, dark = shaded). The image is
- * cached as an object URL (toBlob). Cards ask when they near the viewport; one render per idle callback. No WebGL: resolves null, so callers
- * keep the existing SVG preview.
+ * rendered on an OffscreenCanvas inside thumb3d.worker (off the main thread) and encoded with
+ * convertToBlob. No OffscreenCanvas / WebGL2: null, so callers keep the existing SVG preview.
  */
 
 import * as THREE from "three";
@@ -21,13 +21,6 @@ import BADGE_MAPS from "./badge-maps.json";
 import { buildDoorFrameGeometry, buildPanelGeometry } from "./geometry";
 import { composeMatrix } from "./matrix";
 import { boxWindow } from "./raycast";
-
-export interface Thumb {
-  /** Object URL of the encoded image (toBlob: encoded off the main thread's long tasks). */
-  url: string;
-  /** Instances drawn in the element mesh (= module getElementCount at defaults). */
-  instances: number;
-}
 
 type Scene3D = { kind: "kinetic"; m: KineticPatternModule } | { kind: "static"; m: Static3DPatternModule };
 
@@ -70,13 +63,12 @@ export function shareFromTint(r: number, g: number, b: number): number {
 // ---------------------------------------------------------------- shared renderer
 let shared: THREE.WebGLRenderer | null | undefined;
 
-/** The one offscreen renderer; null when there is no DOM or no WebGL2. */
+/** The one renderer, on an OffscreenCanvas (in the worker); null without OffscreenCanvas or WebGL2. */
 function getRenderer(): THREE.WebGLRenderer | null {
   if (shared !== undefined) return shared;
   shared = null;
-  if (typeof document === "undefined") return null;
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = THUMB_SIZE;
+  if (typeof OffscreenCanvas === "undefined") return null;
+  const canvas = new OffscreenCanvas(THUMB_SIZE, THUMB_SIZE);
   const gl = canvas.getContext("webgl2", { antialias: true, alpha: false, preserveDrawingBuffer: true });
   if (!gl) return null;
   try {
@@ -280,43 +272,13 @@ export function buildThumbScene(slug: string) {
   return { scene, camera, mesh, count: s.m.getElementCount(s.m.defaults) };
 }
 
-/** Render one thumbnail; the PNG/WebP encode runs in toBlob (async), not as a synchronous data-URL encode. */
-function draw(slug: string): Promise<Thumb | null> {
+/** Render one thumbnail and encode it (convertToBlob, async). Runs inside thumb3d.worker; null without OffscreenCanvas / WebGL2. */
+export async function drawThumb(slug: string): Promise<{ blob: Blob; instances: number } | null> {
   const r = SCENES[slug] && getRenderer();
-  if (!r) return Promise.resolve(null);
+  if (!r) return null;
   const { scene, camera, mesh } = buildThumbScene(slug);
   r.render(scene, camera);
   dispose(scene);
-  return new Promise((done) =>
-    r.domElement.toBlob((blob) => done(blob ? { url: URL.createObjectURL(blob), instances: mesh.count } : null), "image/webp", 0.9),
-  );
-}
-
-/** Resolves in the next idle slot after paint, so each thumbnail is its own short task. */
-function idle(): Promise<void> {
-  return new Promise((done) =>
-    requestAnimationFrame(() =>
-      setTimeout(() => {
-        if (typeof requestIdleCallback === "function") requestIdleCallback(() => done(), { timeout: 2000 });
-        else done();
-      }, 0),
-    ),
-  );
-}
-
-const cache = new Map<string, Promise<Thumb | null>>();
-let queue: Promise<unknown> = Promise.resolve();
-
-/**
- * 3D thumbnail for a gallery slug, cached; null for flat patterns or without WebGL.
- * Callers ask only when the card nears the viewport; renders run one per idle callback.
- */
-export function renderThumb3D(slug: string): Promise<Thumb | null> {
-  if (!SCENES[slug] || typeof document === "undefined") return Promise.resolve(null);
-  const hit = cache.get(slug);
-  if (hit) return hit;
-  const job = queue.then(idle).then(() => draw(slug));
-  queue = job.catch(() => null);
-  cache.set(slug, job);
-  return job;
+  const blob = await (r.domElement as unknown as OffscreenCanvas).convertToBlob({ type: "image/webp", quality: 0.9 });
+  return { blob, instances: mesh.count };
 }

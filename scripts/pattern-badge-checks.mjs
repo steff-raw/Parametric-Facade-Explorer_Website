@@ -279,10 +279,13 @@ for (const s of SCORED) {
   const tintBlocks = 100 * (1 - t.reduce((x, y) => x + y, 0) / t.length);
   check("T2", `${s}: backplate tint decoded, 100 x (1 - mean of map) = Blocks within 1 point`, `${f(tintBlocks)} vs ${f(b.blocks)}`, Math.abs(tintBlocks - b.blocks) <= 1);
 }
-// (T4) no WebGL (here: no document at all) -> null, so callers keep the SVG preview
-const none = await T.renderThumb3D("louvre-cascade");
-const flatThumb = await T.renderThumb3D("perforated-screen");
-check("T4", "no WebGL -> renderThumb3D returns null; flat slug -> null", `${none} / ${flatThumb}`, none === null && flatThumb === null);
+// (T4) no WebGL (here: no OffscreenCanvas, no Worker) -> null, so callers keep the SVG preview
+const TC = await import("../src/lib/pattern-badge/thumb-client.ts").catch(() => null);
+const none = await T.drawThumb?.("louvre-cascade");
+const flatThumb = await T.drawThumb?.("perforated-screen");
+const noWorker = TC && (await TC.renderThumb3D("louvre-cascade"));
+check("T4", "no OffscreenCanvas -> worker-side drawThumb null; no Worker -> renderThumb3D null; flat slug -> null", `${none} / ${flatThumb} / ${noWorker}`,
+  none === null && flatThumb === null && !!TC && noWorker === null);
 // (T1) frame geometry = scorer's frame bars: ring outer/inner and depth from the shared builder
 const H = (await import("../src/lib/patterns-3d/hinged-flap-grid/index.ts")).static3dModule;
 const hs = H.getInstanceSize(H.defaults);
@@ -348,9 +351,16 @@ const jsonOk = (s) => {
 check("J", "badges.json (blocks, winter kept) + badge-maps.json (ray map) equal getBadge for all six; only the six scored slugs",
   J ? Object.keys(J).join(" ").slice(0, 56) : "missing", !!J && !!JM && SCORED.every(jsonOk) && Object.keys(J).length === SCORED.length && Object.keys(JM).length === SCORED.length);
 // (P) browser code never scores rays and never encodes PNG on the main thread
-const browserSrc = ["src/components/PatternCard.tsx", "src/lib/pattern-badge/thumb3d.ts"].map((p) => readFileSync(p, "utf8")).join("\n");
-check("P", "PatternCard + thumb3d: no getBadge / scoreBoxes / toDataURL (badge from JSON, thumbnail via toBlob)",
+const srcOf = (p) => { try { return readFileSync(p, "utf8"); } catch { return ""; } };
+const browserSrc = ["src/components/PatternCard.tsx", "src/lib/pattern-badge/thumb3d.ts", "src/lib/pattern-badge/thumb-client.ts", "src/lib/pattern-badge/thumb3d.worker.ts"].map(srcOf).join("\n");
+check("P", "PatternCard + thumbnail code: no getBadge / scoreBoxes / toDataURL (badge from JSON, image via convertToBlob)",
   ["getBadge", "scoreBoxes", "toDataURL"].filter((w) => browserSrc.includes(w)).join(", ") || "none", !/getBadge|scoreBoxes|toDataURL/.test(browserSrc));
+// (P) the 3D render runs in a Web Worker on an OffscreenCanvas: the main-thread side imports no three.js and no 3D module
+const mainSide = srcOf("src/components/PatternCard.tsx") + srcOf("src/lib/pattern-badge/thumb-client.ts");
+check("P", "main thread: PatternCard + thumb-client import no three / thumb3d / patterns-3d; client starts thumb3d.worker; worker uses OffscreenCanvas",
+  /from "three"|thumb3d"|patterns-3d/.test(mainSide) ? "main side imports 3D code" : "clean",
+  !/from "three"|thumb3d"|patterns-3d/.test(mainSide) && /new Worker\(new URL\("\.\/thumb3d\.worker\.ts", import\.meta\.url\)/.test(srcOf("src/lib/pattern-badge/thumb-client.ts")) &&
+  /OffscreenCanvas/.test(srcOf("src/lib/pattern-badge/thumb3d.ts")) && /drawThumb/.test(srcOf("src/lib/pattern-badge/thumb3d.worker.ts")));
 
 // ---------------------------------------------------------------- print
 const pad = (s, n) => String(s).padEnd(n);

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { PatternModule, PatternParams } from "@/lib/patterns";
 import { approx, naReason, SUN_TOOLTIP } from "@/lib/pattern-badge/label";
 import BADGES from "@/lib/pattern-badge/badges.json";
+import { renderThumb3D } from "@/lib/pattern-badge/thumb-client";
 import { PatternThumbnail } from "./PatternCanvas";
 
 interface PatternCardProps {
@@ -35,7 +36,7 @@ export default function PatternCard({
   const [thumb, setThumb] = useState<string | null>(null);
   const card = useRef<HTMLAnchorElement>(null);
 
-  // 3D render only when the card nears the viewport: three.js loads in its own chunk then; no WebGL keeps the SVG.
+  // 3D render only when the card nears the viewport, in a Web Worker (three.js never on the main thread); no WebGL keeps the SVG.
   useEffect(() => {
     const el = card.current;
     if (!scored || !el || typeof IntersectionObserver === "undefined") return;
@@ -44,9 +45,7 @@ export default function PatternCard({
       (entries) => {
         if (!entries.some((e) => e.isIntersecting)) return;
         io.disconnect();
-        import("@/lib/pattern-badge/thumb3d").then(({ renderThumb3D }) =>
-          renderThumb3D(slug).then((t) => live && t && setThumb(t.url)),
-        );
+        renderThumb3D(slug).then((url) => live && url && setThumb(url));
       },
       { rootMargin: "200px" },
     );
