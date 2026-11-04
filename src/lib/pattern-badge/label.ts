@@ -2,8 +2,13 @@
  * Pattern Performance Badge: card wording (P-0038, Stage 3). No three.js here, so cards can import it up front.
  */
 
-/** Nearest 5 with a leading "~": the window-share choice alone moves the score 6-9 points. */
+/**
+ * Nearest 5 with a leading "~": the window-share choice alone moves the score 6-9 points.
+ * Capped so it never reads as fully opaque or fully open: >= 97.5 -> ">95%", <= 2.5 -> "<5%".
+ */
 export function approx(v: number): string {
+  if (v >= 97.5) return ">95%";
+  if (v <= 2.5) return "<5%";
   return `~${5 * Math.round(v / 5)}%`;
 }
 
