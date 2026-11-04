@@ -20,24 +20,19 @@ const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM || "/opt/pw-browsers/chromium",
   args: ["--enable-unsafe-swiftshader", "--use-angle=swiftshader"],
 });
+// No WebGL anywhere (page and the thumbnail worker's OffscreenCanvas): a second browser with the 3D APIs off.
+const noGLBrowser = await chromium.launch({ executablePath: process.env.CHROMIUM || "/opt/pw-browsers/chromium", // (--disable-webgl alone leaves OffscreenCanvas WebGL on; with these flags getContext("webgl2") is null everywhere.)
+  args: ["--disable-3d-apis", "--disable-webgl", "--disable-webgl2", "--disable-gpu", "--disable-software-rasterizer"] });
 const rows = [];
 const check = (id, what, got, pass) => rows.push({ id, what, got: String(got).slice(0, 110), pass });
 
-/** Open a page, collecting console errors and warnings. noWebGL: getContext("webgl"/"webgl2") returns null. */
+/** Open a page, collecting console errors and warnings. noWebGL: browser without WebGL (main thread and workers). */
 async function open(path, vp, { noWebGL = false } = {}) {
-  const page = await browser.newPage({ viewport: { width: vp.width, height: vp.height } });
+  const page = await (noWebGL ? noGLBrowser : browser).newPage({ viewport: { width: vp.width, height: vp.height } });
   const logs = [];
   // Vercel Web Analytics script only exists on Vercel; its 404 under `next start` is not the page's.
   page.on("console", (m) => { if ((m.type() === "error" || m.type() === "warning") && !(m.text() + m.location().url).includes("/_vercel/insights/")) logs.push(`${m.type()}: ${m.text()}`); });
   page.on("pageerror", (e) => logs.push(`pageerror: ${e.message}`));
-  if (noWebGL) {
-    await page.addInitScript(() => {
-      const get = HTMLCanvasElement.prototype.getContext;
-      HTMLCanvasElement.prototype.getContext = function (type, ...rest) {
-        return /webgl/.test(String(type)) ? null : get.call(this, type, ...rest);
-      };
-    });
-  }
   await page.goto(base + path, { waitUntil: "networkidle" });
   return { page, logs };
 }
@@ -82,16 +77,10 @@ const cardBadges = (page) => page.$$eval("div.grid > a", (as) => as.map((a) => {
     img: !!img,
     imgFill: img ? getComputedStyle(img).objectFit : "",
     svgVisible,
+    // px between the badge / pill bottom and the top of the SVG preview box (artwork starts below the overlay when >= 0)
+    headroom: el && svg ? Math.round(svg.getBoundingClientRect().top - el.getBoundingClientRect().bottom) : null,
   };
 }));
-
-// Badges come from static JSON, so they are in the server HTML (no ray test in the page); brick screen shows the cap.
-if (!baseline) {
-  const html = await (await fetch(base + "/")).text();
-  const n = (html.match(/data-sun-badge/g) || []).length;
-  const cap = /Blocks (<!-- -->)?&gt;95%/.test(html);
-  check("P", "server HTML of / already holds all 6 sun badges (precomputed, no client scoring); brick screen 'Blocks >95%'", `${n} badges, >95% ${cap}`, n === SCORED.length && cap);
-}
 
 const snap = {};
 for (const vp of VIEWPORTS) {
@@ -115,6 +104,7 @@ for (const vp of VIEWPORTS) {
       const b = badges.find((x) => x.href === `/patterns/${s}`);
       const ok = b && b.kind === "na" && b.text === "Sun: n/a" && b.title.length > 10 && b.inside && !b.clipped && b.oneLine && !b.img && b.svgVisible;
       check("1-2", `${vp.name} px ${s}: 'Sun: n/a' pill with reason on title, SVG kept`, b ? `${b.text} | ${b.title}` : "missing", !!ok);
+      check("H", `${vp.name} px ${s}: SVG artwork starts below the pill (headroom >= 4 px)`, b ? `${b.headroom} px` : "missing", !!b && b.headroom >= 4);
     }
     const foot = await page.$eval("[data-sun-footnote]", (el) => ({ text: el.textContent.replace(/\s+/g, " ").trim(), title: el.getAttribute("title") || "" })).catch(() => null);
     const footOk = foot && /approximate, after EN ISO 52022-1/.test(foot.text) && /concept estimate, clear sky, not compliance/.test(foot.text) &&
@@ -157,20 +147,27 @@ if (!baseline) {
   const vp = VIEWPORTS[0];
   const { page, logs } = await open("/", vp, { noWebGL: true });
   await page.waitForFunction((n) => document.querySelectorAll("[data-sun-badge]").length >= n, SCORED.length, { timeout: 30000 }).catch(() => {});
-  await page.waitForTimeout(1500);
+  for (const a of await page.$$("div.grid > a")) { await a.scrollIntoViewIfNeeded(); await page.waitForTimeout(150); }
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(3000);
   const nb = await cardBadges(page);
   await page.screenshot({ path: join(out, "gallery-1280-no-webgl.png"), fullPage: true });
   for (const s of SCORED) {
     const b = nb.find((x) => x.href === `/patterns/${s}`);
     check("F", `no WebGL ${s}: SVG preview shown, no 3D image, badge kept`, b ? `svg ${b.svgVisible} img ${b.img} | ${b.text}` : "missing",
-      !!b && b.svgVisible && !b.img && b.kind === "badge" && /^Blocks ~\d+%/.test(b.text));
+      !!b && b.svgVisible && !b.img && b.kind === "badge" && /^Blocks (~\d+|>95|<5)%/.test(b.text));
+    check("H", `no WebGL ${s}: SVG fallback artwork starts below the badge (headroom >= 4 px)`, b ? `${b.headroom} px` : "missing", !!b && b.headroom >= 4);
   }
+  // Badges are precomputed (badges.json), so they need no render path; the brick screen shows the end cap
+  const brick = nb.find((x) => x.href === "/patterns/rotated-brick-screen");
+  check("R", "no WebGL: rotated-brick-screen badge reads 'Blocks >95%' (end cap, never ~100%)", brick ? brick.text : "missing", !!brick && /^Blocks >95% /.test(brick.text));
   check("F", "no WebGL: no page errors", logs.filter((l) => l.startsWith("pageerror")).join(" | ") || "none", !logs.some((l) => l.startsWith("pageerror")));
   await page.close();
 }
 
 writeFileSync(join(out, `card-boxes-${tag}.json`), JSON.stringify(snap, null, 1));
 await browser.close();
+await noGLBrowser.close();
 
 if (baseline) {
   console.log(`baseline written: ${Object.keys(snap["1280"].cards).length} cards at 1280, ${Object.keys(snap["390"].cards).length} at 390`);

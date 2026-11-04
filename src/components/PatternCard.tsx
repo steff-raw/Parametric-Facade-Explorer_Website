@@ -63,7 +63,7 @@ export default function PatternCard({
         params={params}
         className="transition-opacity group-hover:opacity-90"
         // Headroom so the top-left badge / pill sits above the SVG artwork, not on it.
-        previewClassName={sun || flat ? "pt-[52px] pb-3" : ""}
+        previewClassName={sun || flat ? "pt-14 pb-3" : ""}
       >
         {thumb && (
           // eslint-disable-next-line @next/next/no-img-element -- object URL rendered in the browser
