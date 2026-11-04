@@ -1,4 +1,4 @@
-// Pattern Performance Badge, Stage 1 checks (P-0038): ray test through the real 3D instances.
+// Pattern Performance Badge checks (P-0038): Stage 1 ray test through the real 3D instances, Stage 2 thumbnail (pure parts).
 // Run: node --experimental-strip-types --no-warnings scripts/pattern-badge-checks.mjs
 import { register } from "node:module";
 import { execSync } from "node:child_process";
@@ -220,8 +220,8 @@ const sameT = (() => {
   const m = M.composeMatrix(t.position, t.rotation, t.scale);
   return A.getBoxes("louvre-cascade")[37].matrix.every((v, i) => v === m[i]);
 })();
-const canvas = readFileSync(new URL("../src/components/Pattern3DCanvas.tsx", import.meta.url), "utf8");
-const frameGuard = canvas.includes(`const clearance = ${A.FRAME_CLEARANCE};`) && canvas.includes("Math.max(t * 0.85, 0.02)");
+const geoSrc = readFileSync(new URL("../src/lib/pattern-badge/geometry.ts", import.meta.url), "utf8");
+const frameGuard = geoSrc.includes(`export const FRAME_CLEARANCE = ${A.FRAME_CLEARANCE};`) && geoSrc.includes("Math.max(t * 0.85, 0.02)");
 check("11", "boxes from the modules' own defaults (box counts as prototype, transform 37 = module), frame constants = canvas",
   `boxes ${got}${sameT ? ", louvre 37 same" : ""}${frameGuard ? ", frame ok" : ", frame DRIFT"}`,
   SCORED.every((s) => table.find((t) => t.slug === s).boxes === counts[s]) && sameT && frameGuard);
@@ -257,10 +257,36 @@ for (const x of sens) {
   check("S", `${x.s}: spread over N = 10..40 <= 5 points (blocks / winter kept)`, `${f(x.sB)} / ${f(x.sW)}`, x.sB <= 5 && x.sW <= 5);
 }
 
+// ---------------------------------------------------------------- Stage 2: thumbnail (pure parts; WebGL render checked in a browser)
+const T = await import("../src/lib/pattern-badge/thumb3d.ts");
+const G = await import("../src/lib/pattern-badge/geometry.ts");
+// (T2) backplate tint: decode the texture bytes back to transmitted share; 100 (1 - mean) = Blocks within 1 point
+for (const s of SCORED) {
+  const b = A.getBadge(s);
+  const px = T.backplatePixels(b.map);
+  const t = [];
+  for (let i = 0; i < px.length; i += 4) t.push(T.shareFromTint(px[i], px[i + 1], px[i + 2]));
+  const tintBlocks = 100 * (1 - t.reduce((x, y) => x + y, 0) / t.length);
+  check("T2", `${s}: backplate tint decoded, 100 x (1 - mean of map) = Blocks within 1 point`, `${f(tintBlocks)} vs ${f(b.blocks)}`, Math.abs(tintBlocks - b.blocks) <= 1);
+}
+// (T4) no WebGL (here: no document at all) -> null, so callers keep the SVG preview
+const none = await T.renderThumb3D("louvre-cascade");
+const flatThumb = await T.renderThumb3D("perforated-screen");
+check("T4", "no WebGL -> renderThumb3D returns null; flat slug -> null", `${none} / ${flatThumb}`, none === null && flatThumb === null);
+// (T1) frame geometry = scorer's frame bars: ring outer/inner and depth from the shared builder
+const H = (await import("../src/lib/patterns-3d/hinged-flap-grid/index.ts")).static3dModule;
+const hs = H.getInstanceSize(H.defaults);
+const ring = G.buildDoorFrameGeometry(hs, H.defaults.frameWidth);
+ring.computeBoundingBox();
+const rb = ring.boundingBox;
+// geometry buffers are Float32: compare at 1e-6
+const ringOk = near(rb.max.x - rb.min.x, hs[0] + 2 * H.defaults.frameWidth, 1e-6) && near(rb.max.z - rb.min.z, Math.max(hs[2] * 0.85, 0.02), 1e-6) && G.FRAME_CLEARANCE === A.FRAME_CLEARANCE;
+check("T1", "shared door-frame builder: outer width, depth and clearance = the scorer's frame bars", `w ${f(rb.max.x - rb.min.x, 3)} d ${f(rb.max.z - rb.min.z, 3)}`, ringOk);
+
 // ---------------------------------------------------------------- print
 const pad = (s, n) => String(s).padEnd(n);
 const passed = rows.filter((r) => r.pass).length;
-console.log("Pattern Performance Badge, Stage 1 checks (P-0038)");
+console.log("Pattern Performance Badge, Stage 1 + 2 checks (P-0038)");
 console.log("South, 51.5 N, clear sky, summer May-Aug, default pose (kinetic t = 0), neighbour block ignored\n");
 console.log(`${pad("slug", 24)}${pad("boxes", 7)}${pad("blocks %", 10)}${pad("winter kept %", 15)}${pad("g_tot", 7)}${pad("full blocks / winter", 22)}ms`);
 console.log("-".repeat(90));
