@@ -6,6 +6,7 @@ import { patterns, countByTag, countKinetic, allTags } from "@/lib/patterns";
 import TagPill from "./TagPill";
 import PatternCard from "./PatternCard";
 import StudioCard from "./studio/StudioCard";
+import { SUN_TOOLTIP } from "@/lib/pattern-badge/label";
 
 type SortMode = "recent" | "popular";
 type FilterMode = string | null | "__kinetic__";
@@ -118,6 +119,13 @@ export default function Gallery() {
           <PatternCard key={p.meta.slug} pattern={p} />
         ))}
       </div>
+
+      {filtered.length > 0 && (
+        <p data-sun-footnote title={SUN_TOOLTIP} className="mt-10 text-xs leading-body text-muted">
+          Sun badge: approximate, after EN ISO 52022-1; concept estimate, clear sky, not compliance.
+          Scored over the central 60% of the element field (outlined on the 3D view).
+        </p>
+      )}
 
       {filtered.length === 0 && (
         <p className="py-20 text-center text-muted">
