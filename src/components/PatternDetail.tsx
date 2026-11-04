@@ -219,7 +219,7 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
         <div
           className={
             isAdaptive
-              ? "relative w-full"
+              ? "relative w-full max-sm:pt-24"
               : growsWithContent
               ? "relative max-sm:pt-12 sm:mr-[min(340px,38vw)]"
               : isSolar
@@ -228,7 +228,7 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
           }
         >
           <DebugErrorBoundary label={pattern.meta.slug}>
-            {isSolar || growsWithContent ? viewer : <div className={is3D ? "absolute inset-0 sm:sticky sm:top-0 sm:h-[80vh] sm:min-h-[480px]" : "absolute inset-0"}>{viewer}</div>}
+            {isSolar || growsWithContent || isAdaptive ? viewer : <div className={is3D ? "absolute inset-0 sm:sticky sm:top-0 sm:h-[80vh] sm:min-h-[480px]" : "absolute inset-0"}>{viewer}</div>}
           </DebugErrorBoundary>
           {isSolar && <SolarOverlay params={staticParams} hidden={controlsOpen} />}
         </div>
@@ -285,7 +285,7 @@ export default function PatternDetail({ slug }: PatternDetailProps) {
                   <button
                     type="button"
                     onClick={() => setResetViewKey((k) => k + 1)}
-                    className="inline-flex items-center gap-1.5 text-sm transition-colors hover:text-accent"
+                    className="inline-flex items-center gap-1.5 text-sm transition-colors hover:text-accent max-sm:min-h-8 max-sm:min-w-8 max-sm:justify-center"
                     title="Reset the 3D view"
                   >
                     ⟲ Reset view
