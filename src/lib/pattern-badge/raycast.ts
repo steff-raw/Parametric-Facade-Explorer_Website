@@ -13,7 +13,8 @@
  *  - boxes: oriented boxes from `composeMatrix` (= THREE.Object3D.updateMatrix) x instance size
  *    (+ geometry offset). Module space: facade in XY, outward normal +Z.
  *  - rays start on the glazing plane z_g = lowest z of any box vertex and go outward;
- *    n x n origins over the central 60% (each axis) of the boxes' XY bounding box.
+ *    n x n origins over the central 60% (each axis) of the boxes' XY bounding box, one per sample
+ *    cell at a deterministic low-discrepancy offset (not the cell centre: that aliases).
  *  - T_i = share of origins whose ray hits no box; F = sum(w_i T_i) / sum(w_i).
  */
 
@@ -169,6 +170,17 @@ export function boxWindow(boxes: Box[], share = CENTRAL_SHARE): Window {
   return { x0: cx - hw, x1: cx + hw, y0: cy - hh, y1: cy + hh, z: lo[2] };
 }
 
+/**
+ * Offset of origin k inside its sample cell (0..1 per axis): R2 low-discrepancy sequence, deterministic.
+ * A regular cell-centre lattice aliases against the element period (score moved up to 11 points between
+ * N = 10..40); this stratified offset keeps one origin per cell (so `map` stays n x n) and removes it.
+ */
+const R2 = 1.324717957244746; // plastic number
+const frac = (v: number) => v - Math.floor(v);
+export function cellOffset(k: number): [number, number] {
+  return [frac(0.5 + (k + 1) / R2), frac(0.5 + (k + 1) / (R2 * R2))];
+}
+
 /** Ray score of a box scene: n x n origins over the window (default: central 60% of the boxes' bounding box). */
 export function scoreBoxes(boxes: Box[], opts: { n?: number; share?: number; window?: Window } = {}): Score {
   const n = opts.n ?? DEFAULT_N;
@@ -176,7 +188,8 @@ export function scoreBoxes(boxes: Box[], opts: { n?: number; share?: number; win
   const origins: Vec3[] = [];
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
-      origins.push([w.x0 + ((c + 0.5) / n) * (w.x1 - w.x0), w.y1 - ((r + 0.5) / n) * (w.y1 - w.y0), w.z]);
+      const [jx, jy] = cellOffset(r * n + c);
+      origins.push([w.x0 + ((c + jx) / n) * (w.x1 - w.x0), w.y1 - ((r + jy) / n) * (w.y1 - w.y0), w.z]);
     }
   }
   const s = frontSky();
