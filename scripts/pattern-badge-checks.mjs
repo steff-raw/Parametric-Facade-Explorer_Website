@@ -1,8 +1,8 @@
 // Pattern Performance Badge checks (P-0038): Stage 1 ray test through the real 3D instances, Stage 2 thumbnail (pure parts).
-// Run: node --experimental-strip-types --no-warnings scripts/pattern-badge-checks.mjs
+// Run: node --experimental-strip-types --no-warnings scripts/pattern-badge-checks.mjs  (--write: regenerate the badge JSON)
 import { register } from "node:module";
 import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 
 // Loader as in adaptive-panel-checks.mjs: modules import without a file extension (Next/tsc style), so let
 // Node add ".ts" or "/index.ts". The 3D modules also import interfaces without `import type`, which Node's
@@ -13,7 +13,8 @@ register(
       [
         "let ts; export async function initialize(d) { ts = (await import(d.ts)).default; }",
         "export async function resolve(s, c, next) { try { return await next(s, c); } catch (e) { if (s.startsWith('.') && !/\\.[a-z]+$/.test(s)) { try { return await next(s + '.ts', c); } catch { return next(s + '/index.ts', c); } } throw e; } }",
-        "export async function load(u, c, next) { if (!u.endsWith('.ts')) return next(u, c); const r = await next(u, { ...c, format: 'module' });",
+        "export async function load(u, c, next) { if (u.endsWith('.json') && !c.importAttributes?.type) { const r = await next(u, { ...c, format: 'module' }); return { format: 'module', source: 'export default ' + r.source, shortCircuit: true }; }",
+        "  if (!u.endsWith('.ts')) return next(u, c); const r = await next(u, { ...c, format: 'module' });",
         "  const out = ts.transpileModule(String(r.source), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } });",
         "  return { format: 'module', source: out.outputText, shortCircuit: true }; }",
       ].join("\n"),
@@ -58,6 +59,13 @@ const table = SLUGS.map((slug) => {
   const full = R.scoreBoxes(boxes, { share: 1 });
   return { slug, b, ms, full, boxes: boxes.length };
 });
+
+// Badge JSON for the page (--write); asserted equal to getBadge in (J) below.
+if (process.argv.includes("--write")) {
+  const pick = (k) => Object.fromEntries(SCORED.map((s) => [s, k(A.getBadge(s))]));
+  writeFileSync("src/lib/pattern-badge/badges.json", JSON.stringify(pick((b) => ({ blocks: b.blocks, winterKept: b.winterKept })), null, 1) + "\n");
+  writeFileSync("src/lib/pattern-badge/badge-maps.json", JSON.stringify(pick((b) => b.map)) + "\n");
+}
 
 // (1) engine untouched
 let diff = "git error";
@@ -288,14 +296,17 @@ check("T1", "shared door-frame builder: outer width, depth and clearance = the s
 // ---------------------------------------------------------------- Stage 3: card label and thumbnail framing
 const LB = await import("../src/lib/pattern-badge/label.ts");
 // (R) badge numbers read as approximate: nearest 5 with a leading "~"
-const cases = [[76.5, "~75%"], [67.5, "~70%"], [98.4, "~100%"], [11.2, "~10%"], [2.4, "~0%"], [36.7, "~35%"]];
+// End caps: never '~100%' or '~0%' (98.4 central next to visible gaps reads as opaque).
+const cases = [[76.5, "~75%"], [67.5, "~70%"], [11.2, "~10%"], [36.7, "~35%"], [97.4, "~95%"], [97.5, ">95%"], [98.4, ">95%"], [100, ">95%"],
+  [2.6, "~5%"], [2.5, "<5%"], [2.4, "<5%"], [0, "<5%"]];
 const bad = cases.filter(([v, want]) => LB.approx(v) !== want);
-check("R", "badge rounding: nearest 5 with '~' (76.5 -> ~75%, 67.5 -> ~70%, 98.4 -> ~100%)", bad.length ? `wrong: ${bad.map(([v]) => `${v} -> ${LB.approx(v)}`).join(", ")}` : cases.map(([v, w]) => `${v}->${w}`).join(" "), bad.length === 0);
+check("R", "badge rounding: nearest 5 with '~', capped: >= 97.5 -> '>95%', <= 2.5 -> '<5%'", bad.length ? `wrong: ${bad.map(([v]) => `${v} -> ${LB.approx(v)}`).join(", ")}` : cases.map(([v, w]) => `${v}->${w}`).join(" "), bad.length === 0);
 check("R", "n/a reason for every flat slug; tooltip names south, 51.5 N, May-Aug, default pose, neighbour block ignored",
   FLAT.map((s) => LB.naReason(s)).join(" | ").slice(0, 60),
   FLAT.every((s) => LB.naReason(s).length > 10) && /south.*51\.5 N.*May-Aug.*default pose.*neighbour block ignored/i.test(LB.SUN_TOOLTIP));
 // (C) fit-to-content framing at the card aspect (square): every drawn instance corner projected with the thumbnail
-// camera; long side fills 70-85% of the frame, content centred within 5%, nothing outside. Instances = getElementCount.
+// camera lies inside the safe box (headroom under the top-left badge, room above the bottom-left 3D icon), touches it on
+// the limiting axis, centred in it; long side fills 70-90% of the frame. Instances = getElementCount.
 const corners = (mesh) => {
   mesh.geometry.computeBoundingBox();
   const g = mesh.geometry.boundingBox, m = new THREE.Matrix4(), v = new THREE.Vector3(), pts = [];
@@ -305,6 +316,9 @@ const corners = (mesh) => {
   }
   return pts;
 };
+const SB = T.SAFE_BOX;
+check("C", "safe box leaves >= 40 px headroom on a 342 px phone thumbnail (badge 12 + 38 px) and >= 40 px above the bottom icon",
+  SB ? `top ${f(342 * (1 - SB.y1) / 2, 0)} px, bottom ${f(342 * (1 + SB.y0) / 2, 0)} px` : "missing", !!SB && 342 * (1 - SB.y1) / 2 >= 52 && 342 * (1 + SB.y0) / 2 >= 40);
 for (const s of SCORED) {
   const { scene, camera, mesh, count } = T.buildThumbScene(s);
   camera.updateMatrixWorld();
@@ -314,10 +328,29 @@ for (const s of SCORED) {
   const xs = ndc.map((p) => p.x), ys = ndc.map((p) => p.y);
   const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
   const fill = Math.max(x1 - x0, y1 - y0) / 2, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-  check("C", `${s}: framing at aspect ${camera.aspect}: long side 70-85%, centred within 5%, instances = getElementCount`,
-    `fill ${f(100 * fill, 0)}% centre ${f(cx, 2)},${f(cy, 2)} instances ${mesh.count}/${count}`,
-    camera.aspect === 1 && fill >= 0.7 && fill <= 0.85 && Math.abs(cx) <= 0.05 && Math.abs(cy) <= 0.05 && mesh.count === count);
+  const e = 0.005;
+  const inside = !!SB && x0 >= SB.x0 - e && x1 <= SB.x1 + e && y0 >= SB.y0 - e && y1 <= SB.y1 + e;
+  const touch = !!SB && Math.max((x1 - x0) / (SB.x1 - SB.x0), (y1 - y0) / (SB.y1 - SB.y0)) >= 0.97;
+  const centred = !!SB && Math.abs(cx - (SB.x0 + SB.x1) / 2) <= 0.03 && Math.abs(cy - (SB.y0 + SB.y1) / 2) <= 0.03;
+  check("C", `${s}: framing at aspect ${camera.aspect}: inside safe box, touches it, centred; long side 70-90%; instances = getElementCount`,
+    `fill ${f(100 * fill, 0)}% x ${f(x0, 2)}..${f(x1, 2)} y ${f(y0, 2)}..${f(y1, 2)} instances ${mesh.count}/${count}`,
+    camera.aspect === 1 && inside && touch && centred && fill >= 0.7 && fill <= 0.9 && mesh.count === count);
 }
+
+// (J) badges precomputed into static JSON (no ray scoring in the page): JSON == getBadge, bit for bit, for all six.
+// Regenerate with --write after any change to the scorer or a 3D module's defaults.
+const J = await import("../src/lib/pattern-badge/badges.json", { with: { type: "json" } }).then((m) => m.default).catch(() => null);
+const JM = await import("../src/lib/pattern-badge/badge-maps.json", { with: { type: "json" } }).then((m) => m.default).catch(() => null);
+const jsonOk = (s) => {
+  const b = A.getBadge(s);
+  return !!J?.[s] && !!JM?.[s] && J[s].blocks === b.blocks && J[s].winterKept === b.winterKept && JM[s].length === b.map.length && JM[s].every((v, i) => v === b.map[i]);
+};
+check("J", "badges.json (blocks, winter kept) + badge-maps.json (ray map) equal getBadge for all six; only the six scored slugs",
+  J ? Object.keys(J).join(" ").slice(0, 56) : "missing", !!J && !!JM && SCORED.every(jsonOk) && Object.keys(J).length === SCORED.length && Object.keys(JM).length === SCORED.length);
+// (P) browser code never scores rays and never encodes PNG on the main thread
+const browserSrc = ["src/components/PatternCard.tsx", "src/lib/pattern-badge/thumb3d.ts"].map((p) => readFileSync(p, "utf8")).join("\n");
+check("P", "PatternCard + thumb3d: no getBadge / scoreBoxes / toDataURL (badge from JSON, thumbnail via toBlob)",
+  ["getBadge", "scoreBoxes", "toDataURL"].filter((w) => browserSrc.includes(w)).join(", ") || "none", !/getBadge|scoreBoxes|toDataURL/.test(browserSrc));
 
 // ---------------------------------------------------------------- print
 const pad = (s, n) => String(s).padEnd(n);

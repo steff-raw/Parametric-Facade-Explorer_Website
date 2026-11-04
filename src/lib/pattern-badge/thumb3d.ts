@@ -4,7 +4,7 @@
  * One shared offscreen THREE.WebGLRenderer draws each 3D pattern's instanced mesh at its
  * defaults (kinetic at t = 0) with the detail-page camera and lights, plus a backplate on the
  * glazing plane tinted from the ray map (amber = sun reaches, dark = shaded). The image is
- * cached as a data URL. Work starts after first paint. No WebGL: resolves null, so callers
+ * cached as an object URL (toBlob). Cards ask when they near the viewport; one render per idle callback. No WebGL: resolves null, so callers
  * keep the existing SVG preview.
  */
 
@@ -16,13 +16,14 @@ import { static3dModule as rotatedBrick } from "../patterns-3d/rotated-brick-scr
 import { static3dModule as solarSkin } from "../patterns-3d/solar-budget-skin";
 import { static3dModule as adaptivePanel } from "../patterns-3d/adaptive-panel";
 import type { ElementTransform, KineticPatternModule, Static3DPatternModule } from "../patterns-3d/shared/types";
-import { getBadge, getBoxes, type Badge } from "./adapters";
+import { getBoxes } from "./adapters";
+import BADGE_MAPS from "./badge-maps.json";
 import { buildDoorFrameGeometry, buildPanelGeometry } from "./geometry";
 import { composeMatrix } from "./matrix";
 import { boxWindow } from "./raycast";
 
 export interface Thumb {
-  /** PNG data URL. */
+  /** Object URL of the encoded image (toBlob: encoded off the main thread's long tasks). */
   url: string;
   /** Instances drawn in the element mesh (= module getElementCount at defaults). */
   instances: number;
@@ -108,11 +109,12 @@ function setMatrices(mesh: THREE.InstancedMesh, count: number, at: (i: number) =
 /** Backplate on the glazing plane over the scored window, tinted from the ray map. */
 function backplate(slug: string): THREE.Mesh | null {
   const boxes = getBoxes(slug);
-  const badge = getBadge(slug);
-  if (!boxes || !badge) return null;
+  // Ray map precomputed at build (badge-maps.json, asserted equal to the scorer by pattern-badge-checks).
+  const map = (BADGE_MAPS as Record<string, number[]>)[slug];
+  if (!boxes || !map) return null;
   const w = boxWindow(boxes);
-  const n = Math.round(Math.sqrt(badge.map.length));
-  const tex = new THREE.DataTexture(backplatePixels(badge.map), n, n, THREE.RGBAFormat);
+  const n = Math.round(Math.sqrt(map.length));
+  const tex = new THREE.DataTexture(backplatePixels(map), n, n, THREE.RGBAFormat);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.magFilter = THREE.NearestFilter;
   tex.minFilter = THREE.NearestFilter;
@@ -128,8 +130,11 @@ function backplate(slug: string): THREE.Mesh | null {
   return plane;
 }
 
-/** Content fill of the long side of the (square) card thumbnail. */
-export const FRAME_FILL = 0.78;
+/**
+ * Safe box in NDC of the square card thumbnail: content fits inside it. Top band leaves room for the top-left sun badge
+ * (12 px + 38 px on a 342 px phone card), bottom band for the bottom-left 3D icon.
+ */
+export const SAFE_BOX = { x0: -0.9, x1: 0.9, y0: -0.76, y1: 0.68 };
 
 /** Every drawn instance's box corners in world space. */
 function contentPoints(scene: THREE.Scene): THREE.Vector3[] {
@@ -149,8 +154,8 @@ function contentPoints(scene: THREE.Scene): THREE.Vector3[] {
 }
 
 /**
- * Fit-to-content: keep the detail page's view direction, aim at the content centre, then set distance and a
- * sideways shift so the projected content fills FRAME_FILL of the long side, centred, at the card aspect.
+ * Fit-to-content: keep the detail page's view direction, then set distance and a sideways shift so the projected
+ * content fills SAFE_BOX on its limiting axis, centred in it, at the card aspect.
  */
 function fitCamera(camera: THREE.PerspectiveCamera, scene: THREE.Scene, aspect = 1) {
   const pts = contentPoints(scene);
@@ -161,6 +166,7 @@ function fitCamera(camera: THREE.PerspectiveCamera, scene: THREE.Scene, aspect =
   const target = new THREE.Box3().setFromPoints(pts).getCenter(new THREE.Vector3());
   let d = camera.position.length();
   const right = new THREE.Vector3(), up = new THREE.Vector3(), v = new THREE.Vector3();
+  const B = SAFE_BOX;
   for (let it = 0; it < 12; it++) {
     camera.position.copy(target).addScaledVector(dir, d);
     camera.lookAt(target);
@@ -170,12 +176,14 @@ function fitCamera(camera: THREE.PerspectiveCamera, scene: THREE.Scene, aspect =
       v.copy(p).project(camera);
       x0 = Math.min(x0, v.x); x1 = Math.max(x1, v.x); y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y);
     }
-    const fill = Math.max(x1 - x0, y1 - y0) / 2;
+    const fill = Math.max((x1 - x0) / (B.x1 - B.x0), (y1 - y0) / (B.y1 - B.y0));
     const half = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * d;
     right.setFromMatrixColumn(camera.matrixWorld, 0);
     up.setFromMatrixColumn(camera.matrixWorld, 1);
-    target.addScaledVector(right, ((x0 + x1) / 2) * half * aspect).addScaledVector(up, ((y0 + y1) / 2) * half);
-    d *= fill / FRAME_FILL;
+    // Move the camera so the content centre lands on the safe-box centre (its offset scales with the zoom below).
+    const [sx, sy] = [(x0 + x1) / 2 - ((B.x0 + B.x1) / 2) * fill, (y0 + y1) / 2 - ((B.y0 + B.y1) / 2) * fill];
+    target.addScaledVector(right, sx * half * aspect).addScaledVector(up, sy * half);
+    d *= fill;
   }
   camera.position.copy(target).addScaledVector(dir, d);
   camera.lookAt(target);
@@ -272,18 +280,20 @@ export function buildThumbScene(slug: string) {
   return { scene, camera, mesh, count: s.m.getElementCount(s.m.defaults) };
 }
 
-function draw(slug: string): Thumb | null {
+/** Render one thumbnail; the PNG/WebP encode runs in toBlob (async), not as a synchronous data-URL encode. */
+function draw(slug: string): Promise<Thumb | null> {
   const r = SCENES[slug] && getRenderer();
-  if (!r) return null;
+  if (!r) return Promise.resolve(null);
   const { scene, camera, mesh } = buildThumbScene(slug);
   r.render(scene, camera);
-  const thumb = { url: r.domElement.toDataURL("image/png"), instances: mesh.count };
   dispose(scene);
-  return thumb;
+  return new Promise((done) =>
+    r.domElement.toBlob((blob) => done(blob ? { url: URL.createObjectURL(blob), instances: mesh.count } : null), "image/webp", 0.9),
+  );
 }
 
-/** Resolves after the page has painted and the main thread is idle. */
-function afterFirstPaint(): Promise<void> {
+/** Resolves in the next idle slot after paint, so each thumbnail is its own short task. */
+function idle(): Promise<void> {
   return new Promise((done) =>
     requestAnimationFrame(() =>
       setTimeout(() => {
@@ -297,21 +307,16 @@ function afterFirstPaint(): Promise<void> {
 const cache = new Map<string, Promise<Thumb | null>>();
 let queue: Promise<unknown> = Promise.resolve();
 
-/** 3D thumbnail for a gallery slug, cached; null for flat patterns or without WebGL. Renders one at a time after first paint. */
+/**
+ * 3D thumbnail for a gallery slug, cached; null for flat patterns or without WebGL.
+ * Callers ask only when the card nears the viewport; renders run one per idle callback.
+ */
 export function renderThumb3D(slug: string): Promise<Thumb | null> {
   if (!SCENES[slug] || typeof document === "undefined") return Promise.resolve(null);
   const hit = cache.get(slug);
   if (hit) return hit;
-  const job = queue.then(afterFirstPaint).then(() => draw(slug));
+  const job = queue.then(idle).then(() => draw(slug));
   queue = job.catch(() => null);
   cache.set(slug, job);
-  return job;
-}
-
-/** Sun badge for a 3D slug, on the same after-first-paint queue (works without WebGL); null for flat patterns. */
-export function loadBadge(slug: string): Promise<Badge | null> {
-  if (!SCENES[slug] || typeof document === "undefined") return Promise.resolve(null);
-  const job = queue.then(afterFirstPaint).then(() => getBadge(slug));
-  queue = job.catch(() => null);
   return job;
 }

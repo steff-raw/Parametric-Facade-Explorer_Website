@@ -1,0 +1,26 @@
+{
+ "hinged-flap-grid": {
+  "blocks": 45.635554169176785,
+  "winterKept": 27.413304197609257
+ },
+ "rotated-brick-screen": {
+  "blocks": 98.3865102142974,
+  "winterKept": 11.249473007925559
+ },
+ "solar-budget-skin": {
+  "blocks": 61.87555666185951,
+  "winterKept": 77.5626910920386
+ },
+ "adaptive-panel": {
+  "blocks": 36.74353735883893,
+  "winterKept": 86.4579112390253
+ },
+ "louvre-cascade": {
+  "blocks": 76.50238988758657,
+  "winterKept": 67.50409258074234
+ },
+ "radial-pulse-panels": {
+  "blocks": 74.25522014545686,
+  "winterKept": 18.452314743069277
+ }
+}
