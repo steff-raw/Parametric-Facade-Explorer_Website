@@ -6,6 +6,7 @@ import { patterns, countByTag, countKinetic, allTags } from "@/lib/patterns";
 import TagPill from "./TagPill";
 import PatternCard from "./PatternCard";
 import StudioCard from "./studio/StudioCard";
+import WallCheckCard from "./wallcheck/WallCheckCard";
 import { SUN_TOOLTIP } from "@/lib/pattern-badge/label";
 
 type SortMode = "recent" | "popular";
@@ -115,6 +116,7 @@ export default function Gallery() {
 
       <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3">
         {(activeFilter === null || activeFilter === "Perforated") && <StudioCard />}
+        {(activeFilter === null || activeFilter === "Perforated") && <WallCheckCard />}
         {filtered.map((p) => (
           <PatternCard key={p.meta.slug} pattern={p} />
         ))}
