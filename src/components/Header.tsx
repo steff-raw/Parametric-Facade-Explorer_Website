@@ -3,7 +3,7 @@ import Link from "next/link";
 export default function Header() {
   return (
     <header className="w-full">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5 md:px-10">
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5 max-sm:flex-wrap max-sm:gap-y-1 md:px-10">
         <Link
           href="/"
           className="max-sm:inline-flex max-sm:min-h-8 max-sm:items-center whitespace-nowrap text-sm font-semibold tracking-tight text-ink hover:text-accent"
@@ -16,6 +16,12 @@ export default function Header() {
             className="max-sm:inline-flex max-sm:min-h-8 max-sm:items-center text-sm text-muted transition-colors hover:text-accent"
           >
             Studio
+          </Link>
+          <Link
+            href="/wall-check"
+            className="max-sm:inline-flex max-sm:min-h-8 max-sm:items-center whitespace-nowrap text-sm text-muted transition-colors hover:text-accent"
+          >
+            Wall check
           </Link>
           <Link
             href="/collected"
