@@ -7,6 +7,7 @@ import TagPill from "./TagPill";
 import PatternCard from "./PatternCard";
 import StudioCard from "./studio/StudioCard";
 import WallCheckCard from "./wallcheck/WallCheckCard";
+import GlareCard from "./glare/GlareCard";
 import { SUN_TOOLTIP } from "@/lib/pattern-badge/label";
 
 type FilterMode = string | null | "__kinetic__";
@@ -126,6 +127,7 @@ export default function Gallery() {
         </h2>
         <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3">
           <WallCheckCard />
+          <GlareCard />
         </div>
       </section>
     </div>
