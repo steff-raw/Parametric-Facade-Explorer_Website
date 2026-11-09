@@ -198,7 +198,7 @@ function SitePlan({
         {ZONES.map((z) => (
           <g key={z.id}>
             <rect x={z.x0} y={-z.y1} width={z.x1 - z.x0} height={z.y1 - z.y0} fill={z.id === "street" ? "#1c1c1c" : "#2a2a2a"} stroke="#3a3a3a" strokeWidth={f(1)} />
-            <text x={z.x0 + 2} y={-z.y1 + f(12)} fontSize={f(10)} fill="#8a8a8a">{z.label.toUpperCase()} (sample)</text>
+            <text x={z.x0 + 2} y={z.id === "street" ? -z.y0 - f(4) : -z.y1 + f(12)} fontSize={f(10)} fill="#8a8a8a">{z.label.toUpperCase()} (sample)</text>
           </g>
         ))}
         {rects}
@@ -207,7 +207,7 @@ function SitePlan({
         ) : (
           <path d={arc} fill="none" stroke="#e8e8e8" strokeWidth={f(3)} />
         )}
-        <text x={0} y={f(26)} fontSize={f(10)} fill="#8a8a8a" textAnchor="middle">foot (distances measured from here)</text>
+        <text x={-34} y={f(4)} fontSize={f(10)} fill="#8a8a8a" textAnchor="end">foot = origin</text>
         {!stacked &&
           result.hours.map((h) =>
             onPlan(h) ? (
@@ -256,7 +256,11 @@ function Results({
           {result.peak.hour !== null && <> at {hh(result.peak.hour)}</>}. Per-cell maximum, never a sum.
         </p>
       ) : nothing ? (
-        <p>No reflection reaches the ground at {hh(sel.hour)}: the beam goes skyward or the glass is not lit.</p>
+        <p>
+          <strong>No reflection reaches the ground</strong> at {hh(sel.hour)}
+          {result.hours.every((h) => !h.spot && h.peak.erel === 0) ? " (nor at any other hour this day)" : ""}: the beam
+          goes skyward or the glass is not lit.
+        </p>
       ) : (
         <>
           {s && (
