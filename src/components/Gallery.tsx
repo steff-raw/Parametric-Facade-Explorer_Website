@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { patterns, countByTag, countKinetic, allTags } from "@/lib/patterns";
+import { patterns, type PatternModule } from "@/lib/patterns";
 import TagPill from "./TagPill";
 import PatternCard from "./PatternCard";
 import StudioCard from "./studio/StudioCard";
@@ -11,19 +11,33 @@ import { SUN_TOOLTIP } from "@/lib/pattern-badge/label";
 
 type FilterMode = string | null | "__kinetic__";
 
+// Gradient Perforation is a tool, but it sits in the grid like a pattern: one entry, sorted by date.
+const STUDIO_ENTRY = {
+  studio: true as const,
+  meta: {
+    slug: "gradient-perforation",
+    type: "static-2d",
+    createdAt: "2026-10-07",
+    tags: ["Perforated", "Parametric Grid"],
+  },
+};
+type Entry = PatternModule | typeof STUDIO_ENTRY;
+const entries: Entry[] = [...patterns, STUDIO_ENTRY];
+const allTags = Array.from(new Set(entries.flatMap((e) => e.meta.tags))).sort();
+const countTag = (tag: string) => entries.filter((e) => e.meta.tags.includes(tag)).length;
+
 export default function Gallery() {
   const searchParams = useSearchParams();
   const tagFromUrl = searchParams.get("tag");
   const [activeFilter, setActiveFilter] = useState<FilterMode>(tagFromUrl);
-  const tagCounts = useMemo(() => countByTag(), []);
-  const kineticCount = useMemo(() => countKinetic(), []);
+  const kineticCount = entries.filter((e) => e.meta.type === "kinetic-3d").length;
 
   useEffect(() => {
     setActiveFilter(tagFromUrl);
   }, [tagFromUrl]);
 
   const filtered = useMemo(() => {
-    let list = [...patterns];
+    let list = [...entries];
     if (activeFilter === "__kinetic__") {
       list = list.filter((p) => p.meta.type === "kinetic-3d");
     } else if (activeFilter) {
@@ -49,22 +63,12 @@ export default function Gallery() {
         </p>
       </section>
 
-      <section aria-labelledby="tools-heading" className="mb-12">
-        <h2 id="tools-heading" className="mb-6 text-xl font-semibold tracking-tight text-ink">
-          Tools
-        </h2>
-        <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3">
-          <StudioCard />
-          <WallCheckCard />
-        </div>
-      </section>
-
       <h2 className="mb-6 text-xl font-semibold tracking-tight text-ink">Patterns</h2>
 
       <div className="mb-10 flex flex-wrap gap-2">
         <TagPill
           label="All"
-          count={patterns.length}
+          count={entries.length}
           active={activeFilter === null}
           onClick={() => setActiveFilter(null)}
         />
@@ -84,7 +88,7 @@ export default function Gallery() {
             <TagPill
               key={tag}
               label={tag}
-              count={tagCounts[tag] ?? 0}
+              count={countTag(tag)}
               active={activeFilter === tag}
               onClick={() =>
                 setActiveFilter((prev) => (prev === tag ? null : tag))
@@ -94,9 +98,13 @@ export default function Gallery() {
       </div>
 
       <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3">
-        {filtered.map((p) => (
-          <PatternCard key={p.meta.slug} pattern={p} />
-        ))}
+        {filtered.map((p) =>
+          "studio" in p ? (
+            <StudioCard key={p.meta.slug} />
+          ) : (
+            <PatternCard key={p.meta.slug} pattern={p} />
+          ),
+        )}
       </div>
 
       {filtered.length > 0 && (
@@ -111,6 +119,15 @@ export default function Gallery() {
           No patterns in this category yet.
         </p>
       )}
+
+      <section aria-labelledby="tools-heading" className="mt-16">
+        <h2 id="tools-heading" className="mb-6 text-xl font-semibold tracking-tight text-ink">
+          Tools
+        </h2>
+        <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3">
+          <WallCheckCard />
+        </div>
+      </section>
     </div>
   );
 }

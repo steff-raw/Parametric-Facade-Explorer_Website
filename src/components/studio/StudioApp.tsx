@@ -188,9 +188,9 @@ export default function StudioApp() {
     <div className="mx-auto max-w-7xl px-6 py-8 md:px-10">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-tag text-muted">Facade Studio</p>
+          <p className="text-xs uppercase tracking-tag text-muted">Perforated elevation, panel by panel</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight text-ink md:text-3xl">
-            Perforated elevation, panel by panel
+            Gradient Perforation
           </h1>
         </div>
       </div>
