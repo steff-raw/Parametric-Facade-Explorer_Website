@@ -193,7 +193,6 @@ export default function StudioApp() {
             Perforated elevation, panel by panel
           </h1>
         </div>
-        <span className="rounded-full border border-line px-3 py-1 text-xs text-muted">Pro · free during beta</span>
       </div>
 
       <div className="grid gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
@@ -333,14 +332,14 @@ export default function StudioApp() {
               className="rounded-full border border-accent bg-accent px-4 py-2 text-sm font-medium text-canvas"
               onClick={() => download(elevationDxf(result), `${name}.dxf`, "application/dxf")}
             >
-              DXF for fabrication · Pro
+              DXF for fabrication
             </button>
             <button
               type="button"
               className="rounded-full border border-accent bg-accent px-4 py-2 text-sm font-medium text-canvas"
               onClick={() => download(scheduleCsv(result), `${name}-panel-schedule.csv`, "text/csv")}
             >
-              Panel schedule CSV · Pro
+              Panel schedule CSV
             </button>
           </div>
           <p className="text-xs text-muted">
