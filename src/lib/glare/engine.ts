@@ -12,7 +12,7 @@
 // Relative flux = reflected irradiance on level ground / direct sun on level ground (not W/m2).
 // Peaks depend on the 3 m cell size and sample count. Concept screening, not compliance.
 
-// @ts-ignore node type stripping needs the explicit .ts extension; tsconfig does not allow it
+// @ts-expect-error node type stripping needs the explicit .ts extension; tsconfig does not allow it
 import { sunPosition } from "../patterns-3d/solar-budget-skin/engine.ts";
 
 export type Shape = "flat" | "cylinder";
