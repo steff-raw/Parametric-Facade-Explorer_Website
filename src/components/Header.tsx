@@ -12,6 +12,12 @@ export default function Header() {
         </Link>
         <nav className="flex items-center gap-3 sm:gap-6">
           <Link
+            href="/glare-map"
+            className="max-sm:inline-flex max-sm:min-h-8 max-sm:items-center text-sm text-muted transition-colors hover:text-accent"
+          >
+            Glare map
+          </Link>
+          <Link
             href="/collected"
             className="max-sm:inline-flex max-sm:min-h-8 max-sm:items-center text-sm text-muted transition-colors hover:text-accent"
           >
