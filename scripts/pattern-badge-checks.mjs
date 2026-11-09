@@ -270,14 +270,12 @@ for (const x of sens) {
 // ---------------------------------------------------------------- Stage 2: thumbnail (pure parts; WebGL render checked in a browser)
 const T = await import("../src/lib/pattern-badge/thumb3d.ts");
 const G = await import("../src/lib/pattern-badge/geometry.ts");
-// (T2) backplate tint: decode the texture bytes back to transmitted share; 100 (1 - mean) = Blocks within 1 point
+// (T2) no backplate: the thumbnail scene holds only the pattern meshes (no plane, no outline lines)
 for (const s of SCORED) {
-  const b = A.getBadge(s);
-  const px = T.backplatePixels(b.map);
-  const t = [];
-  for (let i = 0; i < px.length; i += 4) t.push(T.shareFromTint(px[i], px[i + 1], px[i + 2]));
-  const tintBlocks = 100 * (1 - t.reduce((x, y) => x + y, 0) / t.length);
-  check("T2", `${s}: backplate tint decoded, 100 x (1 - mean of map) = Blocks within 1 point`, `${f(tintBlocks)} vs ${f(b.blocks)}`, Math.abs(tintBlocks - b.blocks) <= 1);
+  const { scene } = T.buildThumbScene(s);
+  const kinds = new Set();
+  scene.traverse((o) => { if (o.isLine || o.geometry?.type === "PlaneGeometry") kinds.add(o.type); });
+  check("T2", `${s}: thumbnail scene has no backplate plane and no outline`, kinds.size ? [...kinds].join(",") : "none", kinds.size === 0);
 }
 // (T4) no WebGL (here: no OffscreenCanvas, no Worker) -> null, so callers keep the SVG preview
 const TC = await import("../src/lib/pattern-badge/thumb-client.ts").catch(() => null);

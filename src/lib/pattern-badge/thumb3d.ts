@@ -2,8 +2,7 @@
  * Pattern Performance Badge: gallery thumbnail as a real 3D render (P-0038, Stage 2).
  *
  * One shared offscreen THREE.WebGLRenderer draws each 3D pattern's instanced mesh at its
- * defaults (kinetic at t = 0) with the detail-page camera and lights, plus a backplate on the
- * glazing plane tinted from the ray map (amber = sun reaches, dark = shaded). The image is
+ * defaults (kinetic at t = 0) with the detail-page camera and lights, no backplate (the badge carries the score). The image is
  * rendered on an OffscreenCanvas inside thumb3d.worker (off the main thread) and encoded with
  * convertToBlob. No OffscreenCanvas / WebGL2: null, so callers keep the existing SVG preview.
  */
@@ -16,11 +15,8 @@ import { static3dModule as rotatedBrick } from "../patterns-3d/rotated-brick-scr
 import { static3dModule as solarSkin } from "../patterns-3d/solar-budget-skin";
 import { static3dModule as adaptivePanel } from "../patterns-3d/adaptive-panel";
 import type { ElementTransform, KineticPatternModule, Static3DPatternModule } from "../patterns-3d/shared/types";
-import { getBoxes } from "./adapters";
-import BADGE_MAPS from "./badge-maps.json";
 import { buildDoorFrameGeometry, buildPanelGeometry } from "./geometry";
 import { composeMatrix } from "./matrix";
-import { boxWindow } from "./raycast";
 
 type Scene3D = { kind: "kinetic"; m: KineticPatternModule } | { kind: "static"; m: Static3DPatternModule };
 
@@ -34,31 +30,6 @@ const SCENES: Record<string, Scene3D> = {
 };
 
 export const THUMB_SIZE = 512;
-
-// ---------------------------------------------------------------- backplate tint (pure)
-const SHADE: [number, number, number] = [0x24, 0x24, 0x24];
-const LIT: [number, number, number] = [0xff, 0xc4, 0x3a];
-const RANGE = LIT[0] - SHADE[0] + (LIT[1] - SHADE[1]) + (LIT[2] - SHADE[2]);
-
-/** RGBA bytes for the n x n map (transmitted share), bottom row first as a DataTexture reads it. */
-export function backplatePixels(map: number[]): Uint8Array {
-  const n = Math.round(Math.sqrt(map.length));
-  const px = new Uint8Array(4 * n * n);
-  for (let r = 0; r < n; r++) {
-    for (let c = 0; c < n; c++) {
-      const t = Math.min(1, Math.max(0, map[r * n + c]));
-      const o = 4 * ((n - 1 - r) * n + c);
-      for (let k = 0; k < 3; k++) px[o + k] = Math.round(SHADE[k] + (LIT[k] - SHADE[k]) * t);
-      px[o + 3] = 255;
-    }
-  }
-  return px;
-}
-
-/** Inverse of the tint: transmitted share from one backplate pixel. */
-export function shareFromTint(r: number, g: number, b: number): number {
-  return (r - SHADE[0] + (g - SHADE[1]) + (b - SHADE[2])) / RANGE;
-}
 
 // ---------------------------------------------------------------- shared renderer
 let shared: THREE.WebGLRenderer | null | undefined;
@@ -96,30 +67,6 @@ function setMatrices(mesh: THREE.InstancedMesh, count: number, at: (i: number) =
   }
   mesh.count = count;
   mesh.instanceMatrix.needsUpdate = true;
-}
-
-/** Backplate on the glazing plane over the scored window, tinted from the ray map. */
-function backplate(slug: string): THREE.Mesh | null {
-  const boxes = getBoxes(slug);
-  // Ray map precomputed at build (badge-maps.json, asserted equal to the scorer by pattern-badge-checks).
-  const map = (BADGE_MAPS as Record<string, number[]>)[slug];
-  if (!boxes || !map) return null;
-  const w = boxWindow(boxes);
-  const n = Math.round(Math.sqrt(map.length));
-  const tex = new THREE.DataTexture(backplatePixels(map), n, n, THREE.RGBAFormat);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestFilter;
-  tex.needsUpdate = true;
-  const mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
-  const plane = new THREE.Mesh(new THREE.PlaneGeometry(w.x1 - w.x0, w.y1 - w.y0), mat);
-  plane.position.set((w.x0 + w.x1) / 2, (w.y0 + w.y1) / 2, w.z);
-  plane.receiveShadow = true;
-  // Faint outline of the scored window (central 60%): outside it is not scored, not "shaded".
-  const [hx, hy] = [(w.x1 - w.x0) / 2, (w.y1 - w.y0) / 2];
-  const edge = new THREE.BufferGeometry().setFromPoints([[-hx, -hy], [hx, -hy], [hx, hy], [-hx, hy]].map(([x, y]) => new THREE.Vector3(x, y, 0.002)));
-  plane.add(new THREE.LineLoop(edge, new THREE.LineBasicMaterial({ color: "#ffc43a", transparent: true, opacity: 0.9, toneMapped: false })));
-  return plane;
 }
 
 /**
@@ -261,14 +208,12 @@ function dispose(scene: THREE.Scene) {
   });
 }
 
-/** Thumbnail scene for a 3D slug (no renderer needed): meshes, backplate and a camera framed to the square card. */
+/** Thumbnail scene for a 3D slug (no renderer needed): meshes and a camera framed to the square card. */
 export function buildThumbScene(slug: string) {
   const s = SCENES[slug];
   const scene = new THREE.Scene();
   const { camera, mesh } = s.kind === "kinetic" ? kineticScene(s.m, scene) : staticScene(s.m, scene);
   fitCamera(camera, scene);
-  const plate = backplate(slug);
-  if (plate) scene.add(plate);
   return { scene, camera, mesh, count: s.m.getElementCount(s.m.defaults) };
 }
 
