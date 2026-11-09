@@ -9,14 +9,12 @@ import StudioCard from "./studio/StudioCard";
 import WallCheckCard from "./wallcheck/WallCheckCard";
 import { SUN_TOOLTIP } from "@/lib/pattern-badge/label";
 
-type SortMode = "recent" | "popular";
 type FilterMode = string | null | "__kinetic__";
 
 export default function Gallery() {
   const searchParams = useSearchParams();
   const tagFromUrl = searchParams.get("tag");
   const [activeFilter, setActiveFilter] = useState<FilterMode>(tagFromUrl);
-  const [sort, setSort] = useState<SortMode>("recent");
   const tagCounts = useMemo(() => countByTag(), []);
   const kineticCount = useMemo(() => countKinetic(), []);
 
@@ -31,17 +29,13 @@ export default function Gallery() {
     } else if (activeFilter) {
       list = list.filter((p) => p.meta.tags.includes(activeFilter));
     }
-    if (sort === "popular") {
-      list.sort((a, b) => b.meta.popularity - a.meta.popularity);
-    } else {
-      list.sort(
-        (a, b) =>
-          new Date(b.meta.createdAt).getTime() -
-          new Date(a.meta.createdAt).getTime()
-      );
-    }
+    list.sort(
+      (a, b) =>
+        new Date(b.meta.createdAt).getTime() -
+        new Date(a.meta.createdAt).getTime()
+    );
     return list;
-  }, [activeFilter, sort]);
+  }, [activeFilter]);
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-12 md:px-10">
@@ -55,7 +49,19 @@ export default function Gallery() {
         </p>
       </section>
 
-      <div className="mb-4 flex flex-wrap gap-2">
+      <section aria-labelledby="tools-heading" className="mb-12">
+        <h2 id="tools-heading" className="mb-6 text-xl font-semibold tracking-tight text-ink">
+          Tools
+        </h2>
+        <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3">
+          <StudioCard />
+          <WallCheckCard />
+        </div>
+      </section>
+
+      <h2 className="mb-6 text-xl font-semibold tracking-tight text-ink">Patterns</h2>
+
+      <div className="mb-10 flex flex-wrap gap-2">
         <TagPill
           label="All"
           count={patterns.length}
@@ -87,36 +93,7 @@ export default function Gallery() {
           ))}
       </div>
 
-      <div className="mb-10 flex items-center gap-4 text-sm text-muted">
-        <span className="uppercase tracking-tag text-[11px]">Sort</span>
-        <button
-          type="button"
-          onClick={() => setSort("recent")}
-          className={
-            sort === "recent"
-              ? "text-ink max-sm:min-h-8 max-sm:px-1"
-              : "hover:text-accent transition-colors max-sm:min-h-8 max-sm:px-1"
-          }
-        >
-          Recent
-        </button>
-        <span className="text-line">/</span>
-        <button
-          type="button"
-          onClick={() => setSort("popular")}
-          className={
-            sort === "popular"
-              ? "text-ink max-sm:min-h-8 max-sm:px-1"
-              : "hover:text-accent transition-colors max-sm:min-h-8 max-sm:px-1"
-          }
-        >
-          Popular
-        </button>
-      </div>
-
       <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3">
-        {(activeFilter === null || activeFilter === "Perforated") && <StudioCard />}
-        {(activeFilter === null || activeFilter === "Perforated") && <WallCheckCard />}
         {filtered.map((p) => (
           <PatternCard key={p.meta.slug} pattern={p} />
         ))}
@@ -125,7 +102,7 @@ export default function Gallery() {
       {filtered.length > 0 && (
         <p data-sun-footnote title={SUN_TOOLTIP} className="mt-10 text-xs leading-body text-muted">
           Sun badge: approximate, after EN ISO 52022-1; concept estimate, clear sky, not compliance.
-          Scored over the central 60% of the element field (outlined on the 3D view).
+          Scored over the central 60% of the element field.
         </p>
       )}
 

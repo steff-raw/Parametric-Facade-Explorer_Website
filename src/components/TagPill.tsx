@@ -16,7 +16,7 @@ export default function TagPill({
   onClick,
 }: TagPillProps) {
   const className = [
-    "inline-flex items-center gap-2 rounded-full border px-3 py-1.5",
+    "inline-flex items-center gap-2 max-sm:min-h-8 rounded-full border px-3 py-1.5",
     "text-[11px] font-medium uppercase tracking-tag transition-colors",
     active
       ? "border-ink bg-pill text-ink"
