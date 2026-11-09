@@ -63,7 +63,7 @@ export default function StudioThumbnail({ className = "" }: { className?: string
     <canvas
       ref={ref}
       className={`block h-full w-full ${className}`}
-      aria-label="Facade Studio preview: perforated elevation with an attractor gradient, panelled"
+      aria-label="Gradient Perforation preview: perforated elevation with an attractor gradient, panelled"
     />
   );
 }
