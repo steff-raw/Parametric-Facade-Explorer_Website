@@ -12,18 +12,6 @@ export default function Header() {
         </Link>
         <nav className="flex items-center gap-3 sm:gap-6">
           <Link
-            href="/studio"
-            className="max-sm:inline-flex max-sm:min-h-8 max-sm:items-center text-sm text-muted transition-colors hover:text-accent"
-          >
-            Studio
-          </Link>
-          <Link
-            href="/wall-check"
-            className="max-sm:inline-flex max-sm:min-h-8 max-sm:items-center whitespace-nowrap text-sm text-muted transition-colors hover:text-accent"
-          >
-            Wall check
-          </Link>
-          <Link
             href="/collected"
             className="max-sm:inline-flex max-sm:min-h-8 max-sm:items-center text-sm text-muted transition-colors hover:text-accent"
           >
