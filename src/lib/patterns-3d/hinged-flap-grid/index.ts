@@ -32,7 +32,7 @@ export const meta: PatternMeta = {
   slug: "hinged-flap-grid",
   name: "Hinged Flap Grid",
   description:
-    "A rainscreen of hinged door flaps that swing open from a chosen edge. Fixed door frames sit coplanar on the host surface and surround each leaf from the outside — panels move; frames stay put.",
+    "A rainscreen of hinged door flaps that swing open from a chosen edge. Fixed door frames sit coplanar on the host surface and surround each leaf from the outside. Panels move; frames stay put.",
   tags: ["Parametric Grid", "Tessellated"],
   type: "static-3d",
   popularity: 86,
@@ -56,7 +56,7 @@ export const meta: PatternMeta = {
     },
     {
       key: "panelWidth",
-      label: "Panel Width",
+      label: "Panel width",
       min: 0.3,
       max: 3,
       step: 0.05,
@@ -65,7 +65,7 @@ export const meta: PatternMeta = {
     },
     {
       key: "panelHeight",
-      label: "Panel Height",
+      label: "Panel height",
       min: 0.3,
       max: 3,
       step: 0.05,
@@ -74,7 +74,7 @@ export const meta: PatternMeta = {
     },
     {
       key: "panelThickness",
-      label: "Panel Thickness",
+      label: "Panel thickness",
       min: 0.01,
       max: 0.15,
       step: 0.005,
@@ -92,7 +92,7 @@ export const meta: PatternMeta = {
     },
     {
       key: "gapX",
-      label: "Gap (Horizontal)",
+      label: "Horizontal gap",
       min: 0,
       max: 0.5,
       step: 0.01,
@@ -101,7 +101,7 @@ export const meta: PatternMeta = {
     },
     {
       key: "gapY",
-      label: "Gap (Vertical)",
+      label: "Vertical gap",
       min: 0,
       max: 0.5,
       step: 0.01,
@@ -119,7 +119,7 @@ export const meta: PatternMeta = {
     },
     {
       key: "maxAngle",
-      label: "Max Open Angle",
+      label: "Max open angle",
       min: 0,
       max: 90,
       step: 1,
@@ -128,7 +128,7 @@ export const meta: PatternMeta = {
     },
     {
       key: "anglePattern",
-      label: "Angle Pattern",
+      label: "Angle pattern",
       min: 0,
       max: 3,
       step: 1,

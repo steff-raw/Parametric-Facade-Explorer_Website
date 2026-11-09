@@ -40,13 +40,13 @@ export class DebugErrorBoundary extends Component<
   }
 
   private async saveReport() {
-    const note = `React error boundary: ${this.props.label ?? "viewer"} — ${this.state.error?.message ?? "unknown"}`;
+    const note = `React error boundary: ${this.props.label ?? "viewer"}: ${this.state.error?.message ?? "unknown"}`;
     const payload = buildDebugReport(note);
     await submitDebugReport(payload);
   }
 
   private async copyReport() {
-    const note = `React error boundary: ${this.props.label ?? "viewer"} — ${this.state.error?.message ?? "unknown"}`;
+    const note = `React error boundary: ${this.props.label ?? "viewer"}: ${this.state.error?.message ?? "unknown"}`;
     const payload = buildDebugReport(note);
     try {
       await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));

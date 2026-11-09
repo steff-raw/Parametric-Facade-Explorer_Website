@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     template: "%s · Parametric Facade Explorer",
   },
   description:
-    "A gallery of generative, parametric facade design patterns — louvres, perforated screens, brise-soleil, and tessellated panels with live controls.",
+    "A gallery of generative, parametric facade design patterns: louvres, perforated screens, brise-soleil and tessellated panels with live controls.",
 };
 
 export default function RootLayout({

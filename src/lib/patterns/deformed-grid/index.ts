@@ -23,7 +23,7 @@ export const meta: PatternMeta = {
   slug: "deformed-grid",
   name: "Deformed Grid Mesh",
   description:
-    "A rainscreen-style panel grid gently warped by a continuous noise field. Architects use this kind of deformation to break the flatness of curtain-wall modules without abandoning a regular joint layout — useful for studying how light catches undulating cladding.",
+    "A rainscreen-style panel grid gently warped by a continuous noise field. Architects use this kind of deformation to break the flatness of curtain-wall modules without abandoning a regular joint layout. Useful for studying how light catches undulating cladding.",
   tags: ["Parametric Grid", "Tessellated"],
   popularity: 92,
   createdAt: "2026-03-12",

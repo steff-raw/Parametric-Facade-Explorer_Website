@@ -22,7 +22,7 @@ export const meta: PatternMeta = {
   slug: "perforated-screen",
   name: "Perforated Screen",
   description:
-    "A punched-metal privacy screen with controllable open-area ratio. Choose a hole motif from the reference library, then vary size, density, and randomness — the same language used on perforated aluminium rainscreens and balcony shrouds.",
+    "A punched-metal privacy screen. Choose a hole motif from the reference library, then vary size, density, and randomness: the same language used on perforated aluminium rainscreens and balcony shrouds.",
   tags: ["Perforated", "Parametric Grid"],
   popularity: 95,
   createdAt: "2026-05-18",

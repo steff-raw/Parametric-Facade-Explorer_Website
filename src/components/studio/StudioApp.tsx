@@ -299,7 +299,7 @@ export default function StudioApp() {
               ["Panels", `${result.cols} × ${result.rows} = ${result.cols * result.rows}`],
               ["Panel module", `${result.panelW} × ${result.panelH} mm`],
               ["Holes", result.holeCount.toLocaleString("en-GB")],
-              ["Punch tools", result.toolSizes.length ? `${result.toolSizes.length} · Ø ${result.toolSizes.slice(0, 6).join(" / ")}${result.toolSizes.length > 6 ? " …" : ""} mm` : "—"],
+              ["Punch tools", result.toolSizes.length ? `${result.toolSizes.length} · Ø ${result.toolSizes.slice(0, 6).join(" / ")}${result.toolSizes.length > 6 ? " …" : ""} mm` : "none"],
               ["Unique panels", String(result.uniquePanelTypes)],
               ["Sheet area", `${sheetArea.toFixed(1)} m²`],
               ["Aluminium weight", `${Math.round(weight).toLocaleString("en-GB")} kg`],

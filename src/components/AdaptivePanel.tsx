@@ -78,8 +78,8 @@ function GainChart({ rows, cap, hour, focus }: { rows: { h: number; open: number
       </svg>
       <div className="mt-1 flex gap-4 text-[10px] text-muted">
         <span style={{ color: HEAT }}>- - open</span>
-        <span>— static</span>
-        <span className="text-ink">— kinetic</span>
+        <span>Static</span>
+        <span className="text-ink">Kinetic</span>
       </div>
     </div>
   );

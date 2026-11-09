@@ -129,18 +129,18 @@ export default function StackCavity({ params }: { params: PatternParams }) {
           <Card title="KPI (live, updates with sliders)" data-kpi>
             {noFlow ? (
               <div className="text-sm text-ink" data-noflow>
-                No flow: {res.flag === "no-gain" ? "no solar gain, so no buoyancy" : "vents closed"}. Values shown as dashes; particles stopped.
+                No flow: {res.flag === "no-gain" ? "no solar gain, so no buoyancy" : "vents closed"}. Values shown as n/a; particles stopped.
               </div>
             ) : null}
             <dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-1 tabular-nums">
-              <dt className="text-3xl font-bold text-ink sm:text-4xl">{noFlow ? "—" : `${f(res.ach, 0)} ACH`}</dt>
+              <dt className="text-3xl font-bold text-ink sm:text-4xl">{noFlow ? "n/a" : `${f(res.ach, 0)} ACH`}</dt>
               <dd className="text-xs text-muted">cavity air change rate</dd>
-              <dt className="text-xl text-ink">{noFlow ? "—" : `${f(res.Q)} m³/s`}</dt>
+              <dt className="text-xl text-ink">{noFlow ? "n/a" : `${f(res.Q)} m³/s`}</dt>
               <dd className="text-xs text-muted">buoyancy flow Q</dd>
-              <dt className="text-xl text-ink">{noFlow ? "—" : `+${f(res.dT)} K`}</dt>
+              <dt className="text-xl text-ink">{noFlow ? "n/a" : `+${f(res.dT)} K`}</dt>
               <dd className="text-xs text-muted">outlet minus outdoor air</dd>
-              <dt className="text-xl text-ink">{noFlow ? "—" : `${f(res.vCavity)} m/s`}</dt>
-              <dd className="text-xs text-muted">mean cavity velocity (vent {noFlow ? "—" : f(res.vVent)} m/s)</dd>
+              <dt className="text-xl text-ink">{noFlow ? "n/a" : `${f(res.vCavity)} m/s`}</dt>
+              <dd className="text-xs text-muted">mean cavity velocity (vent {noFlow ? "n/a" : f(res.vVent)} m/s)</dd>
             </dl>
             <div className="mt-2 text-[11px] text-muted">Particle speed = Q / (W × depth). {winter ? "Winter preheat" : "Summer vent"} at Tout {cp.tOut} °C; for winter preheat start at 0 °C.</div>
           </Card>
@@ -149,9 +149,9 @@ export default function StackCavity({ params }: { params: PatternParams }) {
             <div className="space-y-1 font-mono text-[11px] leading-relaxed text-ink sm:text-xs">
               <div>Q = Cd × A × √(g·H·ΔT/T) (equal in/out vents). A = {f(cp.opening, 0)} % × {f(section, 1)} m² = {f(res.A, 1)} m², Cd {cp.cd}, T = {f(T, 1)} K</div>
               <div>P = {f(cp.gain / (cp.blind ? 1 : F_BLIND), 0)} W/m² × {f(cp.W * cp.H, 0)} m² = {f(res.P / 1000, 1)} kW{cp.blind ? "" : ` (blind off: ${cp.gain} / f_blind ${F_BLIND}, assumed)`}</div>
-              <div>Q^1.5 = Cd·A·√(g·H/T)·√(P/1200) = {f(cp.cd * res.A * Math.sqrt((G * cp.H) / T) * Math.sqrt(res.P / 1200))} ⇒ Q = {noFlow ? "— (no flow)" : `${f(res.Q)} m³/s`}</div>
-              <div>ΔT = P / (ρ·cp·Q) = {noFlow ? "—" : `${f(res.P / 1000, 1)} kW / (1200 × ${f(res.Q)}) = +${f(res.dT)} K`}</div>
-              <div>ACH = Q × 3600 / ({f(cp.W, 1)} × {f(cp.depth, 1)} × {cp.H} = {f(res.volume, 1)} m³) = {noFlow ? "—" : f(res.ach, 0)}</div>
+              <div>Q^1.5 = Cd·A·√(g·H/T)·√(P/1200) = {f(cp.cd * res.A * Math.sqrt((G * cp.H) / T) * Math.sqrt(res.P / 1200))} ⇒ Q = {noFlow ? "n/a (no flow)" : `${f(res.Q)} m³/s`}</div>
+              <div>ΔT = P / (ρ·cp·Q) = {noFlow ? "n/a" : `${f(res.P / 1000, 1)} kW / (1200 × ${f(res.Q)}) = +${f(res.dT)} K`}</div>
+              <div>ACH = Q × 3600 / ({f(cp.W, 1)} × {f(cp.depth, 1)} × {cp.H} = {f(res.volume, 1)} m³) = {noFlow ? "n/a" : f(res.ach, 0)}</div>
               <div className="pt-1 font-sans text-muted">
                 {noFlow
                   ? `Doubling H to ${cp.H * 2} m: no flow at this setting, so no ratio.`

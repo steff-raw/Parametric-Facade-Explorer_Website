@@ -261,7 +261,7 @@ export function SolarFootnote({ params }: { params: PatternParams }) {
   return (
     <div className="max-w-3xl px-5 pt-4 text-[11px] leading-relaxed text-muted md:px-8">
       <p>
-        * Synthetic clear sky, solar time, g-value 0.6, occupied 09:00–17:00, 8 × 8 cells of 1.5 m.
+        * Synthetic clear sky, solar time, g-value 0.6, occupied 09:00 to 17:00, 8 × 8 cells of 1.5 m.
         {" "}{VIEW_OUT_LABEL.replace(" (cosine-weighted)", "")} 100% → {res.kpi.viewOut.toFixed(0)}%.
         {res.labels.footnote && ` ${res.labels.cooling} / ${res.labels.heating}: ${res.labels.footnote}.`}
       </p>
