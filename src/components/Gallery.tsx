@@ -58,7 +58,7 @@ export default function Gallery() {
           Facade Patterns
         </h1>
         <p className="mt-4 text-base leading-body text-muted">
-          Generative studies for louvres, screens, and tessellated cladding —
+          Generative studies for louvres, screens, and tessellated cladding,
           including kinetic 3D surfaces you can orbit and pause.
         </p>
       </section>

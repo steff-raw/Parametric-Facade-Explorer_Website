@@ -118,7 +118,7 @@ export default function WallCheckApp() {
           Dew-point screening of a wall build-up, approximate, after EN ISO 13788. Concept screening, not compliance.
         </p>
         <p className="mt-2 text-xs text-muted">
-          Limits: steady-state, diffusion only, no drying. Each interface is computed alone, not combined; kg/m2 is never
+          Limits: steady-state, diffusion only, no drying. Each interface is computed alone, not combined; kg/m² is never
           summed across interfaces.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -299,7 +299,7 @@ function Results({
             {flagged.map(({ i, k }) => (
               <li key={k}>
                 {label(k)}: p {pa(i.p)} Pa &gt; ps {pa(i.ps)} Pa,{" "}
-                {i.kg_m2 === null ? "surface condensation, kg/m2 n/a" : `${kg(i.kg_m2)} kg/m2`}
+                {i.kg_m2 === null ? "surface condensation, kg/m² n/a" : `${kg(i.kg_m2)} kg/m²`}
               </li>
             ))}
           </ul>
@@ -307,7 +307,7 @@ function Results({
       </div>
 
       <div>
-        <p className="mb-2 text-[11px] uppercase tracking-tag text-muted">12 months, one row per interface (kg/m2 per month)</p>
+        <p className="mb-2 text-[11px] uppercase tracking-tag text-muted">12 months, one row per interface (kg/m² per month)</p>
         <div className="overflow-x-auto" data-testid="strip-scroll">
           <div className="min-w-[640px]">
             <div className="grid grid-cols-[150px_repeat(12,minmax(0,1fr))] gap-1 text-[11px] text-muted">
@@ -366,7 +366,7 @@ function Results({
               it.flaggedMonths === 0 ? null : (
                 <li key={k}>
                   {label(k)}: {it.flaggedMonths} {it.flaggedMonths === 1 ? "month" : "months"},{" "}
-                  {it.yearKg === null ? "surface condensation, kg/m2 n/a" : `${kg(it.yearKg)} kg/m2 (this interface only)`}
+                  {it.yearKg === null ? "surface condensation, kg/m² n/a" : `${kg(it.yearKg)} kg/m² (this interface only)`}
                 </li>
               )
             )}

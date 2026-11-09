@@ -15,7 +15,7 @@ export const meta: PatternMeta = {
   slug: "radial-louvre",
   name: "Radial Louvre",
   description:
-    "Radial brise-soleil blades arranged around a central oculus. Adjust blade count and tilt to tune solar cut-off for circular atria or cylindrical façades — a familiar sunshade language rendered as a live study model.",
+    "Radial brise-soleil blades arranged around a central oculus. Adjust blade count and blade angle to study the rhythm of sunshade fins for circular atria or cylindrical façades, drawn as a live plan view.",
   tags: ["Louvre", "Brise-Soleil"],
   popularity: 88,
   createdAt: "2026-04-02",
