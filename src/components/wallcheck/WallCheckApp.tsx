@@ -309,8 +309,8 @@ function Results({
       <div>
         <p className="mb-2 text-[11px] uppercase tracking-tag text-muted">12 months, one row per interface (kg/m² per month)</p>
         <div className="overflow-x-auto" data-testid="strip-scroll">
-          <div className="min-w-[640px]">
-            <div className="grid grid-cols-[150px_repeat(12,minmax(0,1fr))] gap-1 text-[11px] text-muted">
+          <div className="min-w-[340px] sm:min-w-[640px]">
+            <div className="grid grid-cols-[64px_repeat(12,minmax(0,1fr))] gap-0.5 text-[10px] sm:grid-cols-[150px_repeat(12,minmax(0,1fr))] sm:gap-1 sm:text-[11px] text-muted">
               <span />
               {MONTHS.map((mn) => (
                 <span key={mn} className="text-center">
@@ -319,7 +319,7 @@ function Results({
               ))}
             </div>
             {Array.from({ length: n + 1 }, (_, k) => (
-              <div key={k} className="mt-1 grid grid-cols-[150px_repeat(12,minmax(0,1fr))] gap-1 text-[11px]">
+              <div key={k} className="mt-1 grid grid-cols-[64px_repeat(12,minmax(0,1fr))] gap-0.5 text-[9px] sm:grid-cols-[150px_repeat(12,minmax(0,1fr))] sm:gap-1 sm:text-[11px]">
                 <span className="truncate pr-1 text-muted" title={label(k)}>
                   {label(k)}
                 </span>
@@ -328,7 +328,7 @@ function Results({
                   return (
                     <span
                       key={mi}
-                      className="flex h-7 items-center justify-center rounded-sm tabular-nums text-ink"
+                      className="flex h-7 items-center justify-center overflow-hidden rounded-sm tabular-nums text-ink"
                       style={{ background: c.flag ? RED : GREEN, opacity: c.flag ? 0.9 : 0.5 }}
                     >
                       {c.flag ? (c.kg_m2 === null ? "n/a" : kg(c.kg_m2)) : ""}
@@ -337,12 +337,12 @@ function Results({
                 })}
               </div>
             ))}
-            <div className="mt-1 grid grid-cols-[150px_repeat(12,minmax(0,1fr))] gap-1 text-[11px]">
+            <div className="mt-1 grid grid-cols-[64px_repeat(12,minmax(0,1fr))] gap-0.5 text-[9px] sm:grid-cols-[150px_repeat(12,minmax(0,1fr))] sm:gap-1 sm:text-[11px]">
               <span className="truncate pr-1 text-muted">Mould: inner RH &gt; 80%</span>
               {result.months.map((mm, mi) => (
                 <span
                   key={mi}
-                  className="flex h-7 items-center justify-center rounded-sm tabular-nums text-ink"
+                  className="flex h-7 items-center justify-center overflow-hidden rounded-sm tabular-nums text-ink"
                   style={{ background: mm.innerSurface.mould ? RED : GREEN, opacity: mm.innerSurface.mould ? 0.9 : 0.5 }}
                 >
                   {Math.round(mm.innerSurface.rh * 100)}
